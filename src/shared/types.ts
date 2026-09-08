@@ -3,8 +3,33 @@ import type { JSONContent } from '@tiptap/react'
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ToolId = 'library' | 'music' | 'notes' | 'goals' | 'settings'
 
+export interface ThemePalette {
+  bg: string
+  surface: string
+  surface2: string
+  surface3: string
+  sidebarBg: string
+  text: string
+  mutedText: string
+  faint: string
+  line: string
+  brand: string
+  accentSoft: string
+  accentDeep: string
+  danger: string
+  dangerSoft: string
+  success: string
+  successSoft: string
+}
+
+export interface ThemePalettes {
+  light: ThemePalette
+  dark: ThemePalette
+}
+
 export interface AppSettings {
   theme: ThemeMode
+  themePalettes: ThemePalettes
   lastTool: ToolId
   sidebarCollapsed: boolean
   bangumiUsername: string

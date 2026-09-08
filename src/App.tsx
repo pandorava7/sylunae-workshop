@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
 import type { ToolId } from './shared/types'
+import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
@@ -24,11 +25,18 @@ export default function App() {
       const effective = snapshot.settings.theme === 'system' ? (media.matches ? 'dark' : 'light') : snapshot.settings.theme
       document.documentElement.dataset.theme = effective
       document.documentElement.classList.toggle('dark', effective === 'dark')
+      const palette = snapshot.settings.themePalettes[effective]
+      themeColorFields.forEach(({ key }) => document.documentElement.style.setProperty(themeCssVariables[key], palette[key]))
+      const primaryForeground = accessibleForeground(palette.brand, palette.accentDeep)
+      const destructiveForeground = accessibleForeground(palette.danger)
+      document.documentElement.style.setProperty(themeDerivedCssVariables.primaryForeground, primaryForeground)
+      document.documentElement.style.setProperty(themeDerivedCssVariables.destructiveForeground, destructiveForeground)
+      document.documentElement.style.setProperty(themeDerivedCssVariables.sidebarPrimaryForeground, primaryForeground)
     }
     apply()
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
-  }, [snapshot?.settings.theme])
+  }, [snapshot?.settings.theme, snapshot?.settings.themePalettes])
 
   useEffect(() => {
     if (snapshot?.settings.lastTool !== 'settings') return

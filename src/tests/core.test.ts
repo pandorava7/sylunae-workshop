@@ -3,6 +3,7 @@ import { createDefaultSnapshot } from '../shared/defaults'
 import { backupSummary, createBackup, parseBackup } from '../data/backup'
 import { fetchBangumiCollection } from '../data/bangumi'
 import { goalProgress, isOverdue } from '../utils'
+import { accessibleForeground, getThemeContrastIssues, normalizeThemePalettes, parseThemePalettes, serializeThemePalettes } from '../shared/theme'
 
 describe('goal progress', () => {
   it('calculates milestone completion and completed override', () => {
@@ -27,6 +28,28 @@ describe('backup format', () => {
 
   it('rejects unrelated json', () => {
     expect(() => parseBackup('{"hello":"world"}')).toThrow()
+  })
+})
+
+describe('theme palettes', () => {
+  it('round-trips editable CSS palettes', () => {
+    const palettes = normalizeThemePalettes()
+    const css = serializeThemePalettes(palettes).replace('--brand: #83749d', '--brand: #123456')
+    expect(parseThemePalettes(css, palettes).light.brand).toBe('#123456')
+  })
+
+  it('rejects CSS without supported color variables', () => {
+    expect(() => parseThemePalettes(':root { color: red; }', normalizeThemePalettes())).toThrow()
+  })
+
+  it('derives readable button foregrounds and detects unsafe text pairs', () => {
+    expect(accessibleForeground('#f8e7a5')).toBe('#292724')
+    expect(accessibleForeground('#2f2f2f', '#ededed')).toBe('#ffffff')
+    expect(getThemeContrastIssues(normalizeThemePalettes())).toEqual([])
+    const palettes = normalizeThemePalettes({ light: { text: '#f6f4f0' } })
+    expect(getThemeContrastIssues(palettes)).toEqual(expect.arrayContaining([expect.objectContaining({ mode: 'light', foreground: 'text' })]))
+    const hoverMismatch = normalizeThemePalettes({ light: { brand: '#2f2f2f', accentSoft: '#ffffff', accentDeep: '#ededed' } })
+    expect(getThemeContrastIssues(hoverMismatch)).toEqual(expect.arrayContaining([expect.objectContaining({ mode: 'light', foreground: 'primaryForeground' })]))
   })
 })
 

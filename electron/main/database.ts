@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import { createDefaultSnapshot } from '../../src/shared/defaults'
 import type { AppSnapshot } from '../../src/shared/types'
+import { normalizeThemePalettes } from '../../src/shared/theme'
 
 let database: Database.Database | null = null
 
@@ -34,7 +35,9 @@ export function loadSnapshot(): AppSnapshot {
     return initial
   }
   try {
-    return JSON.parse(row.payload) as AppSnapshot
+    const parsed = JSON.parse(row.payload) as AppSnapshot
+    const defaults = createDefaultSnapshot()
+    return { ...defaults, ...parsed, settings: { ...defaults.settings, ...parsed.settings, themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) } }
   } catch {
     const fallback = createDefaultSnapshot()
     saveSnapshot(fallback)

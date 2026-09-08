@@ -1,10 +1,15 @@
 import { z } from 'zod'
 import type { AppSnapshot, BackupEnvelope } from '../shared/types'
+import { normalizeThemePalettes } from '../shared/theme'
 
 const timestamp = z.string().min(1)
 const jsonContentSchema: z.ZodType<Record<string, unknown>> = z.lazy(() => z.object({ type: z.string().optional(), text: z.string().optional(), attrs: z.record(z.string(), z.unknown()).optional(), marks: z.array(z.unknown()).optional(), content: z.array(jsonContentSchema).optional() }).passthrough())
 const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']),
+  themePalettes: z.object({
+    light: z.record(z.string(), z.string()),
+    dark: z.record(z.string(), z.string()),
+  }).optional(),
   lastTool: z.enum(['library', 'music', 'notes', 'goals', 'settings']),
   sidebarCollapsed: z.boolean(),
   bangumiUsername: z.string(),
@@ -41,7 +46,14 @@ export function createBackup(snapshot: AppSnapshot): BackupEnvelope {
 }
 
 export function parseBackup(contents: string): BackupEnvelope {
-  return envelopeSchema.parse(JSON.parse(contents)) as BackupEnvelope
+  const backup = envelopeSchema.parse(JSON.parse(contents))
+  return {
+    ...backup,
+    snapshot: {
+      ...backup.snapshot,
+      settings: { ...backup.snapshot.settings, themePalettes: normalizeThemePalettes(backup.snapshot.settings.themePalettes) },
+    },
+  } as BackupEnvelope
 }
 
 export function backupSummary(backup: BackupEnvelope): string {
