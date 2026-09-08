@@ -9,16 +9,19 @@ const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
   { id: 'goals', label: '目标', icon: ListChecks },
 ]
 
-export function Sidebar({ active, collapsed, mobileOpen, onSelect, onToggle, onOpen, onClose }: {
+export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
   active: ToolId
   collapsed: boolean
   mobileOpen: boolean
+  settingsOpen: boolean
   onSelect: (tool: ToolId) => void
+  onOpenSettings: () => void
   onToggle: () => void
   onOpen: () => void
   onClose: () => void
 }) {
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
+  const openSettings = () => { onOpenSettings(); onClose() }
   return <>
     <button className="mobile-menu" onClick={onOpen} aria-label="打开导航"><Menu size={20} /></button>
     {mobileOpen && <button className="sidebar-backdrop" onClick={onClose} aria-label="关闭导航" />}
@@ -35,7 +38,7 @@ export function Sidebar({ active, collapsed, mobileOpen, onSelect, onToggle, onO
         </button>)}
       </nav>
       <div className="sidebar-footer">
-        <button className={active === 'settings' ? 'active' : ''} onClick={() => select('settings')} title="设置">
+        <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
           <Settings size={19} strokeWidth={1.7} /><span>设置</span>
         </button>
         <button onClick={onToggle} title={collapsed ? '展开侧栏' : '收起侧栏'}>
