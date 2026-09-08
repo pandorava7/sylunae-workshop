@@ -181,7 +181,7 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
     </section>
 
     <section className="settings-pane palette-pane">
-      <SettingHeading icon={<Code2 />} title="全局配色" description="逐项调色，或让 AI 修改整份 CSS 后粘贴回来。" />
+      <SettingHeading icon={<Code2 />} title="全局配色" description="逐项调色，或让 AI 定制你的风格配色。" />
       <Tabs value={editingMode} onValueChange={(value) => setEditingMode(value as keyof ThemePalettes)}>
         <TabsList className="palette-tabs"><TabsTrigger value="light"><Sun />浅色配色</TabsTrigger><TabsTrigger value="dark"><Moon />深色配色</TabsTrigger></TabsList>
         {(['light', 'dark'] as const).map((mode) => <TabsContent value={mode} key={mode} className="palette-grid">
@@ -194,7 +194,7 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
       </Tabs>
 
       <div className="palette-safety"><ShieldCheck size={15} /><span>安全检查已开启：按钮文字自动适配；低对比度配色不会保存。</span></div>
-      <div className="palette-code-heading"><div><strong>AI 调色代码</strong><small>仅支持上方列出的变量与六位十六进制色码。</small></div><div className="palette-code-controls"><Button variant="outline" className="button secondary" disabled={!previousPalettes} onClick={() => { if (!previousPalettes) return; onPalettesChange(previousPalettes); setCssCode(serializeThemePalettes(previousPalettes)); setPreviousPalettes(null); setPaletteMessage('已撤销本次配色修改。') }}><Undo2 size={15} />撤销本次</Button><Button variant="outline" className="button secondary" onClick={() => setResetConfirmOpen(true)}><RotateCcw size={15} />恢复默认</Button><Button variant="outline" className="button secondary" onClick={() => void copyCss()}><Copy size={15} />复制 CSS</Button></div></div>
+      <div className="palette-code-heading"><div><strong>AI 调色代码</strong><small>仅支持上方列出的变量与六位十六进制色码。</small></div><div className="palette-code-controls"><Button variant="outline" className="button secondary" disabled={!previousPalettes} onClick={() => { if (!previousPalettes) return; onPalettesChange(previousPalettes); setCssCode(serializeThemePalettes(previousPalettes)); setPreviousPalettes(null); setPaletteMessage('已撤销本次配色修改。') }}><Undo2 size={15} /></Button><Button variant="outline" className="button secondary" onClick={() => setResetConfirmOpen(true)}><RotateCcw size={15} />恢复默认</Button><Button variant="outline" className="button secondary" onClick={() => void copyCss()}><Copy size={15} />复制 CSS</Button></div></div>
       <Textarea ref={cssInput} className="palette-code" value={cssCode} onChange={(event) => { setCssCode(event.target.value); setPaletteMessage('') }} spellCheck={false} aria-label="全局配色 CSS" />
       <div className="palette-code-actions"><span role="status">{paletteMessage}</span><Button className="button primary" onClick={applyCss}><ClipboardPaste size={15} />应用粘贴的 CSS</Button></div>
       <ConfirmDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen} title="恢复默认配色？" description="这会同时还原浅色和深色配色方案，当前自定义颜色将被替换。" confirmLabel="恢复默认" icon={<RotateCcw />} onConfirm={() => { commitPalettes(normalizeThemePalettes(), '已恢复默认配色。'); setResetConfirmOpen(false) }} />
