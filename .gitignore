@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+release/
+coverage/
+*.log
+.vite/
+.electron-cache/
+.playwright-cli/
+output/playwright/
+.DS_Store
