@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
 import type { ToolId } from './shared/types'
+import { TooltipProvider } from './components/ui/tooltip'
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
 const MusicPage = lazy(() => import('./pages/MusicPage').then((module) => ({ default: module.MusicPage })))
@@ -20,6 +21,7 @@ export default function App() {
     const apply = () => {
       const effective = snapshot.settings.theme === 'system' ? (media.matches ? 'dark' : 'light') : snapshot.settings.theme
       document.documentElement.dataset.theme = effective
+      document.documentElement.classList.toggle('dark', effective === 'dark')
     }
     apply()
     media.addEventListener('change', apply)
@@ -38,12 +40,12 @@ export default function App() {
     settings: <SettingsPage />,
   }[snapshot.settings.lastTool]
 
-  return <div className="app-shell">
+  return <TooltipProvider><div className="app-shell">
     <Sidebar active={snapshot.settings.lastTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} onSelect={selectTool} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
     <main className="content-shell">
       <div className="window-drag" />
       <Suspense fallback={<div className="app-loading"><Spinner /></div>}>{page}</Suspense>
       <div className={`save-indicator ${error ? 'error' : ''}`}>{error || (saving ? '正在保存…' : '')}</div>
     </main>
-  </div>
+  </div></TooltipProvider>
 }

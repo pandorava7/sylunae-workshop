@@ -1,0 +1,49 @@
+import { useEffect, useId, useState } from 'react'
+import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { Input } from './ui/input'
+
+export function PromptDialog({ open, title, description, initialValue = '', placeholder, confirmLabel = '确认', validate, onSubmit, onOpenChange }: {
+  open: boolean
+  title: string
+  description?: string
+  initialValue?: string
+  placeholder?: string
+  confirmLabel?: string
+  validate?: (value: string) => string | null
+  onSubmit: (value: string) => void
+  onOpenChange: (open: boolean) => void
+}) {
+  const id = useId()
+  const [value, setValue] = useState(initialValue)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (open) { setValue(initialValue); setError('') }
+  }, [open, initialValue])
+
+  const submit = () => {
+    const clean = value.trim()
+    const validationError = validate?.(clean)
+    if (validationError) { setError(validationError); return }
+    if (!clean) return
+    onSubmit(clean)
+    onOpenChange(false)
+  }
+
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="prompt-dialog">
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        {description && <DialogDescription>{description}</DialogDescription>}
+      </DialogHeader>
+      <label htmlFor={id} className="sr-only">{title}</label>
+      <Input id={id} autoFocus value={value} onChange={(event) => { setValue(event.target.value); setError('') }} onKeyDown={(event) => { if (event.key === 'Enter') submit() }} placeholder={placeholder} aria-invalid={Boolean(error)} />
+      {error && <p className="prompt-error">{error}</p>}
+      <DialogFooter>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+        <Button disabled={!value.trim()} onClick={submit}>{confirmLabel}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+}

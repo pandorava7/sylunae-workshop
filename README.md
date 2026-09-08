@@ -24,6 +24,16 @@ npm run package:win
 
 网页生产文件输出到 `dist/`，Electron 构建输出到 `out/`，Windows 安装包输出到 `release/`。
 
+## UI 组件
+
+项目使用 shadcn/ui + Tailwind CSS v4 作为基础 UI 层，组件源码位于 `src/components/ui`。新增标准交互时优先复用现有组件，或使用官方 CLI 添加：
+
+```bash
+npx shadcn@latest add <component>
+```
+
+应用的品牌配色和浅/深色 token 仍统一在 `src/styles.css` 中维护。请使用 Dialog、AlertDialog 等组件代替浏览器原生 `alert` / `confirm` / `prompt`，以兼容 Electron。
+
 ## 数据说明
 
 - Electron 数据库位于系统分配的应用数据目录，数据库名为 `siyue-workshop.sqlite`。

@@ -5,6 +5,11 @@ import { COLLECTION_LABELS, fetchBangumiCollection, SUBJECT_LABELS } from '../da
 import type { BangumiCollectionItem, BangumiCollectionType, BangumiSubjectType } from '../shared/types'
 import { formatDate } from '../utils'
 import { EmptyState, Spinner } from '../components/Icons'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../components/ui/sheet'
+import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
 
 type ViewMode = 'grid' | 'list'
 type SortMode = 'updated' | 'score' | 'rate'
@@ -65,42 +70,35 @@ export function LibraryPage() {
   return <section className="page library-page">
     <header className="page-header">
       <div><span className="eyebrow">COLLECTION</span><h1>收藏库</h1><p>{cache ? `${cache.items.length} 个条目 · ${cache.username}` : '连接你的 Bangumi 公开收藏'}</p></div>
-      {username && <button className="button secondary" onClick={() => void sync()} disabled={syncing}><RefreshCw size={16} className={syncing ? 'spin' : ''} />{syncing ? '同步中' : '刷新'}</button>}
+      {username && <Button variant="outline" className="button secondary" onClick={() => void sync()} disabled={syncing}><RefreshCw size={16} className={syncing ? 'spin' : ''} />{syncing ? '同步中' : '刷新'}</Button>}
     </header>
 
     {!username ? <EmptyState icon={<Sparkles size={26} />} title="从 Bangumi 开始" description="前往设置填写一个公开的 Bangumi 用户名，五类收藏会安静地汇聚在这里。" /> : <>
       <div className="toolbar library-toolbar">
-        <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、标签或平台" /></label>
-        <label className="select-control"><SlidersHorizontal size={16} /><select value={subjectType} onChange={(event) => setSubjectType(Number(event.target.value))}>
-          <option value={0}>全部类型</option>{Object.entries(SUBJECT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label>
-        <label className="select-control"><select value={collectionType} onChange={(event) => setCollectionType(Number(event.target.value))}>
-          <option value={0}>全部状态</option>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label>
-        <label className="select-control"><ArrowUpDown size={15} /><select value={sort} onChange={(event) => setSort(event.target.value as SortMode)}>
-          <option value="updated">最近更新</option><option value="score">站点评分</option><option value="rate">我的评分</option>
-        </select></label>
-        <div className="segmented icon-segmented"><button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} aria-label="卡片视图"><Grid2X2 size={16} /></button><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="列表视图"><LayoutList size={17} /></button></div>
+        <label className="search-box"><Search size={17} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、标签或平台" /></label>
+        <Select value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value))}><SelectTrigger className="select-control"><SlidersHorizontal size={16} /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">全部类型</SelectItem>{Object.entries(SUBJECT_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+        <Select value={String(collectionType)} onValueChange={(value) => setCollectionType(Number(value))}><SelectTrigger className="select-control"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">全部状态</SelectItem>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+        <Select value={sort} onValueChange={(value) => setSort(value as SortMode)}><SelectTrigger className="select-control"><ArrowUpDown size={15} /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="updated">最近更新</SelectItem><SelectItem value="score">站点评分</SelectItem><SelectItem value="rate">我的评分</SelectItem></SelectContent></Select>
+        <ToggleGroup type="single" value={view} onValueChange={(value) => { if (value) setView(value as ViewMode) }} className="segmented icon-segmented" spacing={0}><ToggleGroupItem value="grid" aria-label="卡片视图"><Grid2X2 size={16} /></ToggleGroupItem><ToggleGroupItem value="list" aria-label="列表视图"><LayoutList size={17} /></ToggleGroupItem></ToggleGroup>
       </div>
       {syncError && <div className="notice error"><span>{syncError}。已保留上次同步的数据。</span><button onClick={() => setSyncError('')}><X size={15} /></button></div>}
-      {syncing && !cache ? <div className="center-loading"><Spinner /><span>正在读取公开收藏…</span></div> : items.length === 0 ? <EmptyState icon={<Search size={24} />} title={cache ? '没有匹配的条目' : '收藏尚未同步'} description={cache ? '换一个关键词或筛选条件试试。' : '点击刷新，从 Bangumi 拉取你的公开收藏。'} action={!cache ? <button className="button primary" onClick={() => void sync()}>开始同步</button> : undefined} /> :
+      {syncing && !cache ? <div className="center-loading"><Spinner /><span>正在读取公开收藏…</span></div> : items.length === 0 ? <EmptyState icon={<Search size={24} />} title={cache ? '没有匹配的条目' : '收藏尚未同步'} description={cache ? '换一个关键词或筛选条件试试。' : '点击刷新，从 Bangumi 拉取你的公开收藏。'} action={!cache ? <Button className="button primary" onClick={() => void sync()}>开始同步</Button> : undefined} /> :
         <div className={`collection-${view}`}>{items.map((item) => <CollectionCard key={item.subjectId} item={item} view={view} onClick={() => setSelected(item)} />)}</div>}
       {cache && <div className="sync-caption">上次同步：{formatDate(cache.syncedAt, true)} · 仅包含公开收藏</div>}
     </>}
 
-    {selected && <><button className="drawer-backdrop" onClick={() => setSelected(null)} aria-label="关闭详情" /><aside className="detail-drawer">
-      <button className="drawer-close" onClick={() => setSelected(null)}><X size={18} /></button>
+    {selected && <Sheet open onOpenChange={(open) => { if (!open) setSelected(null) }}><SheetContent className="detail-drawer" showCloseButton>
       <div className="drawer-cover">{selected.cover ? <img src={selected.cover} alt="" /> : <div className="cover-placeholder"><Sparkles /></div>}</div>
       <div className="drawer-content"><div className="badge-row"><span className="badge">{SUBJECT_LABELS[selected.subjectType]}</span><span className="badge accent">{COLLECTION_LABELS[selected.collectionType]}</span></div>
-        <h2>{selected.nameCn || selected.name}</h2>{selected.nameCn && selected.name !== selected.nameCn && <div className="original-title">{selected.name}</div>}
+        <SheetTitle asChild><h2>{selected.nameCn || selected.name}</h2></SheetTitle><SheetDescription asChild><div className="original-title">{selected.nameCn && selected.name !== selected.nameCn ? selected.name : '收藏条目详情'}</div></SheetDescription>
         <div className="stat-row"><div><span>站点评分</span><strong>{selected.score || '—'}</strong></div><div><span>我的评分</span><strong>{selected.rate || '—'}</strong></div><div><span>排名</span><strong>{selected.rank ? `#${selected.rank}` : '—'}</strong></div></div>
         {selected.summary && <p className="summary">{selected.summary}</p>}
         {selected.comment && <blockquote>{selected.comment}</blockquote>}
         {selected.tags.length > 0 && <div className="tag-row">{selected.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
         <dl><dt>平台</dt><dd>{selected.platform || '—'}</dd><dt>首发日期</dt><dd>{selected.airDate || '—'}</dd><dt>收藏更新</dt><dd>{formatDate(selected.updatedAt, true)}</dd></dl>
-        <button className="button primary full" onClick={() => void openExternal(selected.url)}>在 Bangumi 中查看 <ExternalLink size={15} /></button>
+        <Button className="button primary full" onClick={() => void openExternal(selected.url)}>在 Bangumi 中查看 <ExternalLink size={15} /></Button>
       </div>
-    </aside></>}
+    </SheetContent></Sheet>}
   </section>
 }
 
