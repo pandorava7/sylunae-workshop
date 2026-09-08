@@ -35,9 +35,9 @@ describe('Bangumi client', () => {
 
   it('maps and paginates public collections', async () => {
     const entry = (id: number) => ({
-      subject_id: id, subject_type: 2, rate: 9, type: 3, comment: '', tags: ['科幻'], ep_status: 4, vol_status: 0,
+      subject_id: id, subject_type: 2, rate: 9, type: 3, comment: null, tags: ['科幻'], ep_status: 4, vol_status: 0,
       updated_at: '2026-01-01T00:00:00Z',
-      subject: { id, name: `Title ${id}`, name_cn: `标题 ${id}`, summary: '简介', date: '2026-01-01', platform: 'TV', eps: 12, score: 8.2, rank: 100, images: { large: 'https://example.com/cover.jpg' } },
+      subject: { id, name: `Title ${id}`, name_cn: `标题 ${id}`, short_summary: '简介', date: '2026-01-01', platform: 'TV', eps: 12, score: 8.2, rank: 100, images: { large: 'https://example.com/cover.jpg' } },
     })
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ total: 2, limit: 1, offset: 0, data: [entry(1)] }), { status: 200 }))
@@ -45,7 +45,7 @@ describe('Bangumi client', () => {
     vi.stubGlobal('fetch', fetchMock)
     const result = await fetchBangumiCollection('sai')
     expect(result.items).toHaveLength(2)
-    expect(result.items[0]).toMatchObject({ subjectId: 1, nameCn: '标题 1', collectionType: 3 })
+    expect(result.items[0]).toMatchObject({ subjectId: 1, nameCn: '标题 1', summary: '简介', comment: '', collectionType: 3 })
     expect(fetchMock.mock.calls[1][0]).toContain('offset=1')
   })
 })
