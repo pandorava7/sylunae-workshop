@@ -1,4 +1,4 @@
-import { BookHeart, ChevronLeft, ChevronRight, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
+import { BookHeart, ChevronLeft, ChevronRight, Download, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
 import type { ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
 
@@ -8,6 +8,29 @@ const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
   { id: 'notes', label: '笔记', icon: NotebookPen },
   { id: 'goals', label: '目标', icon: ListChecks },
 ]
+
+const releasesApi = 'https://api.github.com/repos/pandorava7/sylunae-kit/releases/latest'
+
+function openExternal(url: string, target = '_blank') {
+  if (window.siyue) {
+    void window.siyue.system.openExternal(url)
+    return
+  }
+  window.open(url, target, 'noopener,noreferrer')
+}
+
+function downloadDesktopApp() {
+  void fetch(releasesApi, { headers: { Accept: 'application/vnd.github+json' } })
+    .then(async (response) => {
+      if (!response.ok) throw new Error('未找到已发布的安装包')
+      const release = await response.json() as { assets?: Array<{ name: string; browser_download_url: string }> }
+      const installer = release.assets?.find((asset) => /-Setup\.exe$/i.test(asset.name))
+      if (!installer) throw new Error('未找到 Windows 安装包')
+      return installer.browser_download_url
+    })
+    .then((url) => openExternal(url, '_self'))
+    .catch(() => openExternal('https://github.com/pandorava7/sylunae-kit/releases/latest'))
+}
 
 export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
   active: ToolId
@@ -36,6 +59,11 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect,
         {tools.map(({ id, label, icon: Icon }) => <button key={id} className={active === id ? 'active' : ''} onClick={() => select(id)} title={label}>
           <Icon size={19} strokeWidth={1.7} /><span>{label}</span>
         </button>)}
+        <button className="desktop-download-card" onClick={downloadDesktopApp} title="下载桌面端安装包">
+          <span className="download-card-icon"><Download size={18} strokeWidth={1.8} /></span>
+          <span className="download-card-copy"><strong>桌面端安装包</strong><small>下载最新 Windows 版本</small></span>
+          <ChevronRight className="download-card-arrow" size={16} strokeWidth={1.8} />
+        </button>
       </nav>
       <div className="sidebar-footer">
         <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
