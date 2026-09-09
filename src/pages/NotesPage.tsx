@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
-import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { ArchiveRestore, Bold, CheckSquare, Code2, Folder, FolderPlus, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, NotebookPen, Pin, PinOff, Plus, Quote, Search, Strikethrough, Trash2, Undo2 } from 'lucide-react'
+import { NodeSelection } from '@tiptap/pm/state'
 import { useAppStore } from '../app/AppStore'
 import type { Note } from '../shared/types'
 import { extractText, formatDate, newId, nowIso } from '../utils'
@@ -18,8 +18,10 @@ import { PromptDialog } from '../components/PromptDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { MarkdownPaste } from '../editor/markdownPaste'
 import { applyNotePatch } from '../editor/notePatch'
+import { isImageNodeSelection, NoteImage, readImageFile } from '../editor/noteImage'
 
 type FolderFilter = 'all' | 'trash' | string
 
@@ -99,12 +101,43 @@ export function NotesPage() {
 }
 
 function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDestroy }: { note: Note; folders: { id: string; name: string }[]; inTrash: boolean; onSave: (patch: Partial<Note>) => void; onTrash: () => void; onRestore: () => void; onDestroy: () => void }) {
-  const [promptKind, setPromptKind] = useState<'link' | 'image' | null>(null)
+  const [promptKind, setPromptKind] = useState<'link' | 'image-link' | null>(null)
+  const [imageSourceOpen, setImageSourceOpen] = useState(false)
+  const [captionPosition, setCaptionPosition] = useState<number | null>(null)
+  const imageInput = useRef<HTMLInputElement>(null)
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), Image.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), Markdown, MarkdownPaste],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), Markdown, MarkdownPaste],
     content: note.content,
     editable: !inTrash,
-    editorProps: { attributes: { class: 'tiptap-editor' } },
+    editorProps: {
+      attributes: { class: 'tiptap-editor' },
+      handleClickOn: (view, _pos, node, nodePos, _event, direct) => {
+        if (!direct || node.type.name !== 'image' || inTrash) return false
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, nodePos)))
+        setCaptionPosition(nodePos)
+        return true
+      },
+      handleKeyDown: (view, event) => {
+        if (event.key !== 'Enter' || inTrash || !isImageNodeSelection(view.state.selection)) return false
+        event.preventDefault()
+        setCaptionPosition(view.state.selection.from)
+        return true
+      },
+      handleDrop: (view, event) => {
+        if (inTrash) return false
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith('image/'))
+        if (!files.length) return false
+
+        event.preventDefault()
+        const dropPosition = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from
+        void Promise.all(files.map(readImageFile)).then((sources) => {
+          const position = Math.min(dropPosition, view.state.doc.content.size)
+          const images = sources.map((src) => ({ type: 'image', attrs: { src } }))
+          editor?.chain().focus().insertContentAt(position, images).run()
+        })
+        return true
+      },
+    },
     onUpdate: ({ editor: instance }) => onSave({ content: instance.getJSON() }),
   })
 
@@ -119,6 +152,27 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
   }
   const addImage = (url: string) => editor.chain().focus().setImage({ src: url }).run()
+  const addImageFile = async (file: File) => addImage(await readImageFile(file))
+  const caption = captionPosition === null ? '' : editor.state.doc.nodeAt(captionPosition)?.attrs.caption || ''
+  const saveCaption = (value: string) => {
+    if (captionPosition === null) return
+    editor.chain().focus().command(({ tr }) => {
+      const image = tr.doc.nodeAt(captionPosition)
+      if (image?.type.name !== 'image') return false
+      tr.setNodeMarkup(captionPosition, undefined, { ...image.attrs, caption: value || null })
+      return true
+    }).run()
+  }
+  const deleteCaptionedImage = () => {
+    if (captionPosition === null) return
+    editor.chain().focus().command(({ tr }) => {
+      const image = tr.doc.nodeAt(captionPosition)
+      if (image?.type.name !== 'image') return false
+      tr.delete(captionPosition, captionPosition + image.nodeSize)
+      return true
+    }).run()
+    setCaptionPosition(null)
+  }
   const action = (active: boolean, title: string, icon: React.ReactNode, run: () => void) => <button className={active ? 'active' : ''} title={title} onClick={run}>{icon}</button>
 
   return <div className="note-editor-wrap">
@@ -141,12 +195,14 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       {action(editor.isActive('codeBlock'), '代码块', <Code2 size={16} />, () => { editor.chain().focus().toggleCodeBlock().run() })}
       <i />
       {action(editor.isActive('link'), '链接', <Link2 size={16} />, () => setPromptKind('link'))}
-      {action(false, '图片', <ImagePlus size={16} />, () => setPromptKind('image'))}
+      {action(false, '图片', <ImagePlus size={16} />, () => setImageSourceOpen(true))}
       {action(false, '撤销', <Undo2 size={16} />, () => { editor.chain().focus().undo().run() })}
     </div>}
     <EditorContent className="note-editor-content" editor={editor} />
     <div className="editor-status">{inTrash ? `删除于 ${formatDate(note.deletedAt || '', true)}` : `自动保存 · ${formatDate(note.updatedAt, true)}`}</div>
     <PromptDialog open={promptKind === 'link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="添加链接" description="为当前选中文字设置链接。" initialValue={editor.getAttributes('link').href || 'https://'} placeholder="https://example.com" confirmLabel="应用链接" validate={(value) => /^https?:\/\//i.test(value) ? null : '请输入 http 或 https 链接'} onSubmit={setLink} />
-    <PromptDialog open={promptKind === 'image'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="插入图片" description="支持 HTTPS 图片地址或 data URL。" placeholder="https://example.com/image.png" confirmLabel="插入图片" validate={(value) => /^https:\/\//i.test(value) || /^data:image\//i.test(value) ? null : '请输入 HTTPS 图片地址或 data URL'} onSubmit={addImage} />
+    <Dialog open={imageSourceOpen} onOpenChange={setImageSourceOpen}><DialogContent className="image-source-dialog"><DialogHeader><DialogTitle>插入图片</DialogTitle><DialogDescription>通过网络链接或从本地文件夹选择图片。</DialogDescription></DialogHeader><div className="image-source-actions"><Button variant="outline" className="button secondary" onClick={() => { setImageSourceOpen(false); setPromptKind('image-link') }}><Link2 size={17} />使用图片链接</Button><Button className="button primary" onClick={() => imageInput.current?.click()}><Folder size={17} />从文件夹选择</Button></div><input ref={imageInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImageSourceOpen(false); void addImageFile(file) } event.currentTarget.value = '' }} /></DialogContent></Dialog>
+    <PromptDialog open={promptKind === 'image-link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="通过链接插入图片" description="请输入可直接访问的 HTTPS 图片地址。" placeholder="https://example.com/image.png" confirmLabel="插入图片" validate={(value) => /^https:\/\//i.test(value) ? null : '请输入 HTTPS 图片地址'} onSubmit={addImage} />
+    <PromptDialog open={captionPosition !== null} onOpenChange={(open) => { if (!open) setCaptionPosition(null) }} title="图片说明" description="为图片添加 caption；留空保存可移除已有说明。" initialValue={caption} placeholder="输入图片说明" confirmLabel="保存说明" destructiveLabel="删除图片" allowEmpty onSubmit={saveCaption} onDestructive={deleteCaptionedImage} />
   </div>
 }

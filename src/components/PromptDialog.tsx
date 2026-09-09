@@ -3,15 +3,18 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 
-export function PromptDialog({ open, title, description, initialValue = '', placeholder, confirmLabel = '确认', validate, onSubmit, onOpenChange }: {
+export function PromptDialog({ open, title, description, initialValue = '', placeholder, confirmLabel = '确认', destructiveLabel, allowEmpty = false, validate, onSubmit, onDestructive, onOpenChange }: {
   open: boolean
   title: string
   description?: string
   initialValue?: string
   placeholder?: string
   confirmLabel?: string
+  destructiveLabel?: string
+  allowEmpty?: boolean
   validate?: (value: string) => string | null
   onSubmit: (value: string) => void
+  onDestructive?: () => void
   onOpenChange: (open: boolean) => void
 }) {
   const id = useId()
@@ -26,7 +29,7 @@ export function PromptDialog({ open, title, description, initialValue = '', plac
     const clean = value.trim()
     const validationError = validate?.(clean)
     if (validationError) { setError(validationError); return }
-    if (!clean) return
+    if (!clean && !allowEmpty) return
     onSubmit(clean)
     onOpenChange(false)
   }
@@ -41,8 +44,9 @@ export function PromptDialog({ open, title, description, initialValue = '', plac
       <Input id={id} autoFocus value={value} onChange={(event) => { setValue(event.target.value); setError('') }} onKeyDown={(event) => { if (event.key === 'Enter') submit() }} placeholder={placeholder} aria-invalid={Boolean(error)} />
       {error && <p className="prompt-error">{error}</p>}
       <DialogFooter>
+        {destructiveLabel && onDestructive && <Button variant="destructive" className="prompt-dialog-delete" onClick={() => { onDestructive(); onOpenChange(false) }}>{destructiveLabel}</Button>}
         <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-        <Button disabled={!value.trim()} onClick={submit}>{confirmLabel}</Button>
+        <Button disabled={!allowEmpty && !value.trim()} onClick={submit}>{confirmLabel}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
