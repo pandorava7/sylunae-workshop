@@ -44,9 +44,10 @@ function createWindow(): void {
     height: 880,
     minWidth: 900,
     minHeight: 620,
-    backgroundColor: '#f5f3ef',
+    backgroundColor: '#f7f7f7',
+    icon: app.isPackaged ? undefined : fileURLToPath(new URL('../../build/icon.png', import.meta.url)),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#77736d', height: 42 },
+    titleBarOverlay: { color: '#00000000', symbolColor: '#6f6f6f', height: 42 },
     webPreferences: {
       preload: fileURLToPath(new URL('../preload/index.mjs', import.meta.url)),
       contextIsolation: true,

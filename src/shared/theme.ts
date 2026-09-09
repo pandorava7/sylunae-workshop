@@ -42,6 +42,21 @@ export interface ThemeContrastIssue {
 
 export const defaultThemePalettes: ThemePalettes = {
   light: {
+    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#f7f7f7',
+    text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
+    accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
+    success: '#4f8060', successSoft: '#eaf3ed',
+  },
+  dark: {
+    bg: '#171717', surface: '#1f1f1f', surface2: '#292929', surface3: '#333333', sidebarBg: '#1b1b1b',
+    text: '#ededed', mutedText: '#a1a1a1', faint: '#6f6f6f', line: '#333333', brand: '#ededed',
+    accentSoft: '#2c2c2c', accentDeep: '#ffffff', danger: '#df7070', dangerSoft: '#382323',
+    success: '#76a985', successSoft: '#233128',
+  },
+}
+
+const legacyDefaultThemePalettes: ThemePalettes = {
+  light: {
     bg: '#f6f4f0', surface: '#fbfaf8', surface2: '#f0ede8', surface3: '#e9e5df', sidebarBg: '#eeebe6',
     text: '#292724', mutedText: '#817c75', faint: '#aaa49c', line: '#dfdbd4', brand: '#83749d',
     accentSoft: '#e9e3ef', accentDeep: '#655678', danger: '#b65d5d', dangerSoft: '#f5e6e4',
@@ -76,7 +91,7 @@ export function contrastRatio(foreground: string, background: string) {
 
 export function accessibleForeground(...backgrounds: string[]) {
   const candidateScore = (foreground: string) => Math.min(...backgrounds.map((background) => contrastRatio(foreground, background)))
-  return candidateScore('#ffffff') >= candidateScore('#292724') ? '#ffffff' : '#292724'
+  return candidateScore('#ffffff') >= candidateScore('#202020') ? '#ffffff' : '#202020'
 }
 
 export function getThemeContrastIssues(palettes: ThemePalettes): ThemeContrastIssue[] {
@@ -122,6 +137,13 @@ export function normalizeThemePalettes(value?: Partial<Record<'light' | 'dark', 
     light: { ...defaultThemePalettes.light, ...value?.light },
     dark: { ...defaultThemePalettes.dark, ...value?.dark },
   }
+}
+
+export function migrateDefaultThemePalettes(value?: Partial<Record<'light' | 'dark', Partial<ThemePalette>>>): ThemePalettes {
+  const palettes = normalizeThemePalettes(value)
+  const isLegacyDefault = (['light', 'dark'] as const).every((mode) =>
+    themeColorFields.every(({ key }) => palettes[mode][key] === legacyDefaultThemePalettes[mode][key]))
+  return isLegacyDefault ? defaultThemePalettes : palettes
 }
 
 export function serializeThemePalettes(palettes: ThemePalettes): string {

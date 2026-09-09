@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { createDefaultSnapshot } from '../shared/defaults'
 import type { AppSnapshot } from '../shared/types'
-import { normalizeThemePalettes } from '../shared/theme'
+import { migrateDefaultThemePalettes } from '../shared/theme'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
 
@@ -22,7 +22,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     ...defaults,
     ...snapshot,
     version: 1,
-    settings: { ...defaults.settings, ...snapshot.settings, themePalettes: normalizeThemePalettes(snapshot.settings?.themePalettes) },
+    settings: { ...defaults.settings, ...snapshot.settings, themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
     tracks: snapshot.tracks ?? [],
     folders: snapshot.folders ?? [],
     notes: snapshot.notes ?? [],

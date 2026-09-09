@@ -59,11 +59,11 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect,
         {tools.map(({ id, label, icon: Icon }) => <button key={id} className={active === id ? 'active' : ''} onClick={() => select(id)} title={label}>
           <Icon size={19} strokeWidth={1.7} /><span>{label}</span>
         </button>)}
-        <button className="desktop-download-card" onClick={downloadDesktopApp} title="下载桌面端安装包">
+        {!window.siyue && <button className="desktop-download-card" onClick={downloadDesktopApp} title="下载桌面端安装包">
           <span className="download-card-icon"><Download size={18} strokeWidth={1.8} /></span>
           <span className="download-card-copy"><strong>桌面端安装包</strong><small>下载最新 Windows 版本</small></span>
           <ChevronRight className="download-card-arrow" size={16} strokeWidth={1.8} />
-        </button>
+        </button>}
       </nav>
       <div className="sidebar-footer">
         <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>

@@ -34,7 +34,7 @@ describe('backup format', () => {
 describe('theme palettes', () => {
   it('round-trips editable CSS palettes', () => {
     const palettes = normalizeThemePalettes()
-    const css = serializeThemePalettes(palettes).replace('--brand: #83749d', '--brand: #123456')
+    const css = serializeThemePalettes(palettes).replace('--brand: #2f2f2f', '--brand: #123456')
     expect(parseThemePalettes(css, palettes).light.brand).toBe('#123456')
   })
 
@@ -43,8 +43,8 @@ describe('theme palettes', () => {
   })
 
   it('derives readable button foregrounds and detects unsafe text pairs', () => {
-    expect(accessibleForeground('#f8e7a5')).toBe('#292724')
-    expect(accessibleForeground('#2f2f2f', '#ededed')).toBe('#ffffff')
+    expect(accessibleForeground('#f8e7a5')).toBe('#202020')
+    expect(accessibleForeground('#2f2f2f', '#ededed')).toBe('#202020')
     expect(getThemeContrastIssues(normalizeThemePalettes())).toEqual([])
     const palettes = normalizeThemePalettes({ light: { text: '#f6f4f0' } })
     expect(getThemeContrastIssues(palettes)).toEqual(expect.arrayContaining([expect.objectContaining({ mode: 'light', foreground: 'text' })]))
