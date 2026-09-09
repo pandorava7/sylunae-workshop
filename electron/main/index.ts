@@ -1,16 +1,27 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { Readable } from 'node:stream'
+import { fileURLToPath } from 'node:url'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
 import type { AppSnapshot, MusicEditableMetadata, MusicMetadataUpdate, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
+const AUDIO_MIME_TYPES: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.opus': 'audio/ogg',
+}
 const sessionMediaPaths = new Set<string>()
 let tagLibPromise: ReturnType<typeof initializeTagLib> | null = null
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'siyue-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+  { scheme: 'siyue-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
 function isIndexedPath(filePath: string): boolean {
@@ -120,6 +131,8 @@ async function parseTrack(filePath: string, id: string = crypto.randomUUID()): P
     title: metadata.common.title?.trim() || basename(filePath, extname(filePath)),
     artist: metadata.common.artist?.trim() || '未知艺术家',
     album: metadata.common.album?.trim() || '未知专辑',
+    albumArtist: metadata.common.albumartist?.trim() || '',
+    albumId: null,
     duration: metadata.format.duration || 0,
     cover,
     missing: false,
@@ -219,13 +232,42 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
-  protocol.handle('siyue-media', (request) => {
+  const rendererOrigin = process.env.ELECTRON_RENDERER_URL ? new URL(process.env.ELECTRON_RENDERER_URL).origin : 'null'
+  protocol.handle('siyue-media', async (request) => {
+    const requestOrigin = request.headers.get('Origin')
+    if (requestOrigin && requestOrigin !== rendererOrigin) return new Response('Forbidden', { status: 403 })
     const encoded = new URL(request.url).pathname.slice(1)
     const filePath = Buffer.from(encoded, 'base64url').toString('utf8')
     if (!isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extname(filePath).toLowerCase())) {
       return new Response('Not found', { status: 404 })
     }
-    return net.fetch(pathToFileURL(filePath).toString())
+    const size = statSync(filePath).size
+    const headers = new Headers({
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': rendererOrigin,
+      'Content-Type': AUDIO_MIME_TYPES[extname(filePath).toLowerCase()] || 'application/octet-stream',
+    })
+    const range = request.headers.get('Range')
+    if (!range) {
+      headers.set('Content-Length', String(size))
+      return new Response(Readable.toWeb(createReadStream(filePath)) as unknown as BodyInit, { status: 200, headers })
+    }
+
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+    if (!match || (!match[1] && !match[2])) {
+      headers.set('Content-Range', `bytes */${size}`)
+      return new Response(null, { status: 416, headers })
+    }
+    const suffixLength = match[1] ? null : Number(match[2])
+    const start = suffixLength === null ? Number(match[1]) : Math.max(0, size - suffixLength)
+    const end = match[2] && suffixLength === null ? Math.min(Number(match[2]), size - 1) : size - 1
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= size) {
+      headers.set('Content-Range', `bytes */${size}`)
+      return new Response(null, { status: 416, headers })
+    }
+    headers.set('Content-Length', String(end - start + 1))
+    headers.set('Content-Range', `bytes ${start}-${end}/${size}`)
+    return new Response(Readable.toWeb(createReadStream(filePath, { start, end })) as unknown as BodyInit, { status: 206, headers })
   })
   registerIpc()
   createWindow()

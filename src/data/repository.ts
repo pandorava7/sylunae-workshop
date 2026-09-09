@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie'
 import { createDefaultSnapshot } from '../shared/defaults'
 import type { AppSnapshot } from '../shared/types'
 import { migrateDefaultThemePalettes } from '../shared/theme'
+import { reconcileMusicLibrary } from '../music/albums'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
 
@@ -18,12 +19,14 @@ const db = new SiyueDatabase()
 function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const defaults = createDefaultSnapshot()
   if (!snapshot) return defaults
+  const music = reconcileMusicLibrary(snapshot.tracks ?? [], snapshot.albums ?? [])
   return {
     ...defaults,
     ...snapshot,
     version: 1,
     settings: { ...defaults.settings, ...snapshot.settings, themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
-    tracks: snapshot.tracks ?? [],
+    tracks: music.tracks,
+    albums: music.albums,
     folders: snapshot.folders ?? [],
     notes: snapshot.notes ?? [],
     goals: snapshot.goals ?? [],

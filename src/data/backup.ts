@@ -20,7 +20,8 @@ const bangumiItemSchema = z.object({
   name: z.string(), nameCn: z.string(), summary: z.string(), cover: z.string(), score: z.number(), rank: z.number().nullable(), rate: z.number(), comment: z.string(), tags: z.array(z.string()),
   epStatus: z.number(), volStatus: z.number(), totalEpisodes: z.number(), airDate: z.string(), platform: z.string(), updatedAt: timestamp, url: z.string(),
 })
-const trackSchema = z.object({ id: z.string(), path: z.string(), title: z.string(), artist: z.string(), album: z.string(), duration: z.number().nonnegative(), cover: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
+const trackSchema = z.object({ id: z.string(), path: z.string(), title: z.string(), artist: z.string(), album: z.string(), albumArtist: z.string().optional().default(''), albumId: z.string().nullable().optional().default(null), duration: z.number().nonnegative(), cover: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
+const albumSchema = z.object({ id: z.string(), title: z.string(), artist: z.string(), cover: z.string(), createdAt: timestamp, updatedAt: timestamp })
 const folderSchema = z.object({ id: z.string(), name: z.string(), createdAt: timestamp, updatedAt: timestamp })
 const noteSchema = z.object({ id: z.string(), title: z.string(), content: jsonContentSchema, folderId: z.string().nullable(), tags: z.array(z.string()), pinned: z.boolean(), deletedAt: timestamp.nullable(), createdAt: timestamp, updatedAt: timestamp })
 const milestoneSchema = z.object({ id: z.string(), title: z.string(), dueDate: z.string(), completed: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
@@ -35,6 +36,7 @@ const envelopeSchema = z.object({
     settings: settingsSchema,
     bangumi: z.object({ username: z.string(), items: z.array(bangumiItemSchema), syncedAt: timestamp }).nullable(),
     tracks: z.array(trackSchema),
+    albums: z.array(albumSchema).optional().default([]),
     folders: z.array(folderSchema),
     notes: z.array(noteSchema),
     goals: z.array(goalSchema),

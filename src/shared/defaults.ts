@@ -15,6 +15,7 @@ export function createDefaultSnapshot(): AppSnapshot {
     },
     bangumi: null,
     tracks: [],
+    albums: [],
     folders: [],
     notes: [],
     goals: [],

@@ -73,9 +73,20 @@ export interface MusicTrack {
   title: string
   artist: string
   album: string
+  albumArtist: string
+  albumId: string | null
   duration: number
   cover: string
   missing: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MusicAlbum {
+  id: string
+  title: string
+  artist: string
+  cover: string
   createdAt: string
   updatedAt: string
 }
@@ -150,6 +161,7 @@ export interface AppSnapshot {
   settings: AppSettings
   bangumi: BangumiProfileCache | null
   tracks: MusicTrack[]
+  albums: MusicAlbum[]
   folders: NoteFolder[]
   notes: Note[]
   goals: Goal[]
