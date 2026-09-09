@@ -148,12 +148,13 @@ function CollectionCard({ item, onClick }: { item: BangumiCollectionItem; onClic
   const shownTags = item.tags.slice(0, 3)
   const hiddenTagCount = item.tags.length - shownTags.length
   const year = item.airDate.match(/^\d{4}/)?.[0]
+  const hasPersonalRating = item.rate > 0
 
   return <button className="collection-card" onClick={onClick} aria-label={`查看 ${item.nameCn || item.name}`}>
     <div className="collection-cover">
       {item.cover ? <img src={item.cover} alt="" loading="lazy" decoding="async" /> : <div className="cover-placeholder"><Sparkles /></div>}
       <span className={`collection-state state-${item.collectionType}`}>{COLLECTION_LABELS[item.collectionType]}</span>
-      <span className="collection-score"><Star size={13} fill="currentColor" />{formatScore(item.score)}</span>
+      <span className={`collection-score${hasPersonalRating ? '' : ' website-score'}`}><Star size={13} fill="currentColor" />{formatScore(hasPersonalRating ? item.rate : item.score)}</span>
       <div className="collection-title"><h3>{item.nameCn || item.name}</h3>{year && <span>{year}</span>}</div>
     </div>
     <div className="collection-tags">

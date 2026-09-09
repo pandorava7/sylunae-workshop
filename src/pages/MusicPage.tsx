@@ -11,6 +11,7 @@ import { Input } from '../components/ui/input'
 import { Slider } from '../components/ui/slider'
 import { MusicMetadataSheet } from '../components/MusicMetadataSheet'
 import { MusicAlbumSheet } from '../components/MusicAlbumSheet'
+import { MusicImportDialog } from '../components/MusicImportDialog'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AudioWaveform } from '../components/AudioWaveform'
 import { adjacentTrack, playbackQueue } from '../music/playback'
@@ -36,6 +37,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   const [removeTarget, setRemoveTarget] = useState<MusicTrack | null>(null)
   const [editTarget, setEditTarget] = useState<MusicTrack | null>(null)
   const [albumTarget, setAlbumTarget] = useState<MusicAlbum | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const audio = useRef<HTMLAudioElement>(null)
   const releasingForEdit = useRef(false)
   const current = tracks.find((track) => track.id === currentId) || null
@@ -59,13 +61,15 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
     onNowPlayingChange(playing && current ? { ...current, cover: currentCover } : null)
   }, [current, currentCover, playing, onNowPlayingChange])
 
-  const addTracks = async () => {
-    if (!window.siyue) return
-    const picked = await window.siyue.music.pick()
-    if (!picked.length) return
+  const addImportedTracks = (picked: MusicTrack[]) => {
     update((state) => {
       const paths = new Set(state.tracks.map((track) => track.path))
-      const library = reconcileMusicLibrary([...state.tracks, ...picked.filter((track) => !paths.has(track.path))], state.albums)
+      const additions = picked.filter((track) => {
+        if (paths.has(track.path)) return false
+        paths.add(track.path)
+        return true
+      })
+      const library = reconcileMusicLibrary([...state.tracks, ...additions], state.albums)
       return { ...state, ...library }
     })
   }
@@ -161,7 +165,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   if (!window.siyue) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
 
   return <section className="page music-page">
-    <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><Button className="button primary" onClick={() => void addTracks()}><Plus size={17} />添加音乐</Button></header>
+    <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={17} />添加音乐</Button></header>
     <div className="music-hero">
       <div className="hero-art">{currentCover ? <img src={currentCover} alt="" /> : <Disc3 size={48} strokeWidth={1.2} />}</div>
       <div className="hero-copy"><span>正在播放</span><h2>{current?.title || '还没有选择音乐'}</h2><p>{current ? `${current.artist} · ${current.album}` : '从资料库中选择一首，给此刻一点声音。'}</p></div>
@@ -172,7 +176,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
       <label className="search-box"><Search size={17} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={view === 'tracks' ? '搜索歌曲、艺术家或专辑' : '搜索专辑或艺术家'} /></label>
     </div>
     {playerError && <div className="notice error">{playerError}</div>}
-    {tracks.length === 0 ? <EmptyState icon={<FileMusic size={26} />} title="资料库还是空的" description="选择电脑里的音频文件。丝月工坊只保存索引，不会移动或复制原文件。" action={<Button className="button primary" onClick={() => void addTracks()}><Plus size={16} />添加第一首音乐</Button>} /> :
+    {tracks.length === 0 ? <EmptyState icon={<FileMusic size={26} />} title="资料库还是空的" description="可以索引电脑中的音频，也可以从 YouTube 或音频链接下载到本地。" action={<Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={16} />添加第一首音乐</Button>} /> :
       view === 'tracks' ? <div className="track-table"><div className="track-head"><span>#</span><span>歌曲</span><span>专辑</span><span>时长</span><span /></div>{filtered.map((track, index) => <div key={track.id} className={`track-row ${currentId === track.id ? 'active' : ''} ${track.missing ? 'missing' : ''}`} onDoubleClick={() => void playTrack(track)}>
         <button className="track-play" disabled={track.missing} onClick={() => currentId === track.id ? togglePlay() : void playTrack(track)}>{currentId === track.id && playing ? <Pause size={15} /> : <span>{index + 1}</span>}</button>
         <div className="track-title"><div className="tiny-cover">{trackCover(track, albums, tracks) ? <img src={trackCover(track, albums, tracks)} alt="" /> : <Music2 size={15} />}</div><div><strong>{track.title}</strong><span>{track.missing ? '文件已移动或删除' : track.artist}</span></div></div>
@@ -193,6 +197,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
     </div>
     {editTarget && <MusicMetadataSheet track={editTarget} onClose={() => setEditTarget(null)} onSave={saveMetadata} />}
     {albumTarget && <MusicAlbumSheet album={albumTarget} tracks={tracks.filter((track) => track.albumId === albumTarget.id)} onClose={() => setAlbumTarget(null)} onSave={(cover) => saveAlbumCover(albumTarget.id, cover)} onPlay={(track) => { void playTrack(track, albumTarget.id); setAlbumTarget(null) }} />}
+    <MusicImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={addImportedTracks} />
     <ConfirmDialog open={Boolean(removeTarget)} onOpenChange={(open) => { if (!open) setRemoveTarget(null) }} title="从资料库移除？" description={removeTarget ? `将移除《${removeTarget.title}》的索引，原始音乐文件不会被删除。` : ''} confirmLabel="移除索引" destructive icon={<Trash2 />} onConfirm={() => { if (removeTarget) remove(removeTarget); setRemoveTarget(null) }} />
   </section>
 }

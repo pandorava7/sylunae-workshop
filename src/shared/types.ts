@@ -114,6 +114,27 @@ export interface MusicMetadataUpdate {
   cover: MusicCoverUpdate
 }
 
+export type MusicRemoteSource = 'youtube' | 'audio-url'
+
+export type MusicImportStage = 'reading' | 'downloading' | 'converting' | 'metadata' | 'complete'
+
+export interface MusicImportProgress {
+  taskId: string
+  source: MusicRemoteSource
+  stage: MusicImportStage
+  message: string
+  percent: number | null
+  receivedBytes?: number
+  totalBytes?: number | null
+}
+
+export interface MusicRemoteImport {
+  taskId: string
+  source: MusicRemoteSource
+  url: string
+  directory: string
+}
+
 export interface NoteFolder {
   id: string
   name: string
@@ -191,6 +212,10 @@ export interface SiyueAPI {
   }
   music: {
     pick: () => Promise<MusicTrack[]>
+    getDownloadDirectory: () => Promise<string>
+    pickDownloadDirectory: (currentDirectory: string) => Promise<string | null>
+    importRemote: (input: MusicRemoteImport) => Promise<MusicTrack>
+    onImportProgress: (listener: (progress: MusicImportProgress) => void) => () => void
     relocate: (trackId: string) => Promise<MusicTrack | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getAudioUrl: (path: string) => Promise<string>

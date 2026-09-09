@@ -1,10 +1,14 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
-import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { basename, extname } from 'node:path'
-import { Readable } from 'node:stream'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { isIP } from 'node:net'
+import { basename, extname, join, resolve } from 'node:path'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
+import ffmpegPath from 'ffmpeg-static'
+import { create as createYoutubeDl } from 'youtube-dl-exec'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
-import type { AppSnapshot, MusicEditableMetadata, MusicMetadataUpdate, MusicTrack } from '../../src/shared/types'
+import type { AppSnapshot, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
 const AUDIO_MIME_TYPES: Record<string, string> = {
@@ -18,7 +22,10 @@ const AUDIO_MIME_TYPES: Record<string, string> = {
   '.opus': 'audio/ogg',
 }
 const sessionMediaPaths = new Set<string>()
+const sessionDownloadDirectories = new Set<string>()
 let tagLibPromise: ReturnType<typeof initializeTagLib> | null = null
+const MAX_REMOTE_AUDIO_BYTES = 1024 * 1024 * 1024
+type ProgressReporter = (progress: Omit<MusicImportProgress, 'taskId' | 'source'>) => void
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'siyue-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
@@ -36,6 +43,185 @@ async function initializeTagLib() {
 function getTagLib() {
   tagLibPromise ??= initializeTagLib()
   return tagLibPromise
+}
+
+function unpackedPath(filePath: string): string {
+  return app.isPackaged ? filePath.replace('app.asar', 'app.asar.unpacked') : filePath
+}
+
+function getDefaultMusicDirectory(): string {
+  const directory = resolve(app.getPath('userData'), 'music')
+  mkdirSync(directory, { recursive: true })
+  sessionDownloadDirectories.add(directory)
+  return directory
+}
+
+function sanitizeFileName(value: string): string {
+  const clean = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/g, '').trim()
+  return (clean || '未命名音频').slice(0, 180)
+}
+
+function uniqueFilePath(directory: string, fileName: string): string {
+  const extension = extname(fileName)
+  const stem = basename(fileName, extension)
+  let candidate = join(directory, fileName)
+  for (let index = 2; existsSync(candidate); index += 1) candidate = join(directory, `${stem} (${index})${extension}`)
+  return candidate
+}
+
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true
+  if (isIP(host) === 4) {
+    const [a, b] = host.split('.').map(Number)
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+  }
+  return isIP(host) === 6 && (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb'))
+}
+
+function checkedRemoteImport(input: MusicRemoteImport): { taskId: string; source: MusicRemoteImport['source']; url: URL; directory: string } {
+  if (!input || typeof input.taskId !== 'string' || !/^[a-zA-Z0-9-]{1,64}$/.test(input.taskId) || !['youtube', 'audio-url'].includes(input.source) || typeof input.url !== 'string' || input.url.length > 4096 || typeof input.directory !== 'string') {
+    throw new Error('导入参数无效')
+  }
+  const directory = resolve(input.directory)
+  if (!sessionDownloadDirectories.has(directory)) throw new Error('请先选择文件保存位置')
+  let url: URL
+  try { url = new URL(input.url) } catch { throw new Error('请输入有效的链接') }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('仅支持 HTTP 或 HTTPS 链接')
+  if (input.source === 'youtube') {
+    const host = url.hostname.toLowerCase()
+    if (host !== 'youtu.be' && host !== 'youtube.com' && !host.endsWith('.youtube.com')) throw new Error('请输入 YouTube 视频链接')
+  } else if (isPrivateHost(url.hostname)) {
+    throw new Error('不支持本机或局域网链接')
+  }
+  mkdirSync(directory, { recursive: true })
+  return { taskId: input.taskId, source: input.source, url, directory }
+}
+
+function extensionFromResponse(url: URL, contentType: string): string {
+  const fromUrl = extname(url.pathname).toLowerCase()
+  if (AUDIO_EXTENSIONS.has(fromUrl)) return fromUrl
+  const mime = contentType.split(';')[0].trim().toLowerCase()
+  return ({
+    'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/aac': '.aac', 'audio/wav': '.wav',
+    'audio/x-wav': '.wav', 'audio/ogg': '.ogg', 'application/ogg': '.ogg', 'audio/flac': '.flac',
+    'audio/x-flac': '.flac', 'audio/opus': '.opus',
+  } as Record<string, string>)[mime] || ''
+}
+
+function responseFileName(response: Response, url: URL, extension: string): string {
+  const disposition = response.headers.get('content-disposition') || ''
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)?.[1]
+  let supplied = encoded ? decodeURIComponent(encoded) : plain
+  supplied ||= basename(url.pathname) || `下载音频${extension}`
+  const suppliedExtension = extname(supplied).toLowerCase()
+  return `${sanitizeFileName(basename(supplied, suppliedExtension))}${AUDIO_EXTENSIONS.has(suppliedExtension) ? suppliedExtension : extension}`
+}
+
+async function importAudioUrl(url: URL, directory: string, report: ProgressReporter): Promise<MusicTrack> {
+  report({ stage: 'reading', message: '正在连接音频地址…', percent: null })
+  const response = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Siyue-Workshop/0.1' } })
+  if (!response.ok || !response.body) throw new Error(`下载失败（HTTP ${response.status}）`)
+  const finalUrl = new URL(response.url)
+  if (!['http:', 'https:'].includes(finalUrl.protocol) || isPrivateHost(finalUrl.hostname)) throw new Error('下载地址重定向到了不受支持的位置')
+  const contentType = response.headers.get('content-type') || ''
+  const extension = extensionFromResponse(finalUrl, contentType)
+  if (!extension) throw new Error('链接返回的内容不是支持的音频文件')
+  const declaredSize = Number(response.headers.get('content-length') || 0)
+  const totalBytes = Number.isFinite(declaredSize) && declaredSize > 0 ? declaredSize : null
+  if (totalBytes && totalBytes > MAX_REMOTE_AUDIO_BYTES) throw new Error('音频文件不能超过 1 GB')
+  const filePath = uniqueFilePath(directory, responseFileName(response, finalUrl, extension))
+  const partialPath = `${filePath}.part`
+  let received = 0
+  let lastReportAt = 0
+  report({ stage: 'downloading', message: '正在下载音频…', percent: totalBytes ? 0 : null, receivedBytes: 0, totalBytes })
+  const sizeLimit = new Transform({
+    transform(chunk, _encoding, callback) {
+      received += chunk.length
+      const now = Date.now()
+      if (now - lastReportAt >= 100 || (totalBytes !== null && received >= totalBytes)) {
+        const percent = totalBytes ? Math.min(100, Math.round((received / totalBytes) * 100)) : null
+        report({ stage: 'downloading', message: percent === null ? '正在下载音频…' : `正在下载音频 ${percent}%`, percent, receivedBytes: received, totalBytes })
+        lastReportAt = now
+      }
+      callback(received > MAX_REMOTE_AUDIO_BYTES ? new Error('音频文件不能超过 1 GB') : null, chunk)
+    },
+  })
+  try {
+    await pipeline(Readable.fromWeb(response.body as never), sizeLimit, createWriteStream(partialPath, { flags: 'wx' }))
+    const { rename } = await import('node:fs/promises')
+    await rename(partialPath, filePath)
+    report({ stage: 'metadata', message: '正在读取音频信息…', percent: 100, receivedBytes: received, totalBytes })
+    const track = await parseTrack(filePath)
+    sessionMediaPaths.add(filePath)
+    report({ stage: 'complete', message: '导入完成', percent: 100, receivedBytes: received, totalBytes })
+    return track
+  } catch (error) {
+    if (existsSync(partialPath)) unlinkSync(partialPath)
+    if (existsSync(filePath)) unlinkSync(filePath)
+    throw error
+  }
+}
+
+async function importYoutube(url: URL, directory: string, report: ProgressReporter): Promise<MusicTrack> {
+  if (!ffmpegPath) throw new Error('FFmpeg 组件不可用，请重新安装桌面端')
+  const ytDlpBinary = unpackedPath(join(app.getAppPath(), 'node_modules', 'youtube-dl-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'))
+  const youtubeDl = createYoutubeDl(ytDlpBinary)
+  report({ stage: 'reading', message: '正在读取视频信息…', percent: null })
+  const metadata = await youtubeDl(url.toString(), { dumpSingleJson: true, skipDownload: true, noPlaylist: true, noWarnings: true })
+  if (typeof metadata === 'string' || !metadata.id || !metadata.title) throw new Error('无法读取这个 YouTube 视频的信息')
+  if (metadata.is_live) throw new Error('暂不支持直播内容')
+  const stem = sanitizeFileName(`${metadata.title} [${metadata.id}]`)
+  const filePath = uniqueFilePath(directory, `${stem}.mp3`)
+  const output = `${filePath.slice(0, -4).replace(/%/g, '%%')}.%(ext)s`
+  const stageOrder: Record<MusicImportStage, number> = { reading: 0, downloading: 1, converting: 2, metadata: 3, complete: 4 }
+  let currentStage: MusicImportStage = 'downloading'
+  const reportStage = (stage: MusicImportStage, message: string, percent: number | null = null) => {
+    if (stageOrder[stage] < stageOrder[currentStage]) return
+    currentStage = stage
+    report({ stage, message, percent })
+  }
+  try {
+    reportStage('downloading', '正在下载 YouTube 音频…', 0)
+    const subprocess = youtubeDl.exec(url.toString(), {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: 0,
+      addMetadata: true,
+      embedThumbnail: true,
+      ffmpegLocation: unpackedPath(ffmpegPath),
+      maxFilesize: '1G',
+      noPlaylist: true,
+      noWarnings: true,
+      noOverwrites: true,
+      newline: true,
+      output,
+      windowsFilenames: process.platform === 'win32',
+    })
+    const readProgress = (chunk: Buffer | string) => {
+      const outputText = chunk.toString()
+      const download = /\[download\]\s+(\d+(?:\.\d+)?)%/i.exec(outputText)
+      if (download) {
+        const percent = Math.min(100, Math.round(Number(download[1])))
+        reportStage('downloading', `正在下载 YouTube 音频 ${percent}%`, percent)
+      }
+      if (/\[(?:ExtractAudio|FFmpeg|VideoConvertor|Merger)\]/i.test(outputText)) reportStage('converting', '正在使用 FFmpeg 转换为 MP3…')
+      if (/\[(?:Metadata|EmbedThumbnail)\]/i.test(outputText)) reportStage('metadata', '正在写入标题、作者与封面…')
+    }
+    ;(subprocess.stdout as unknown as NodeJS.ReadableStream | null)?.on('data', readProgress)
+    ;(subprocess.stderr as unknown as NodeJS.ReadableStream | null)?.on('data', readProgress)
+    await subprocess
+    if (!existsSync(filePath)) throw new Error('YouTube 音频转换完成，但未找到输出文件')
+    reportStage('metadata', '正在整理音乐元信息…')
+    const track = await parseTrack(filePath)
+    sessionMediaPaths.add(filePath)
+    reportStage('complete', '导入完成', 100)
+    return track
+  } catch (error) {
+    if (existsSync(filePath)) unlinkSync(filePath)
+    throw error
+  }
 }
 
 function assertEditableAudioPath(filePath: string): void {
@@ -184,6 +370,30 @@ function registerIpc(): void {
       try { const track = await parseTrack(filePath); tracks.push(track); sessionMediaPaths.add(track.path) } catch { /* Ignore unreadable files. */ }
     }
     return tracks
+  })
+  ipcMain.handle('music:get-download-directory', () => getDefaultMusicDirectory())
+  ipcMain.handle('music:pick-download-directory', async (_event, currentDirectory: string) => {
+    const defaultPath = typeof currentDirectory === 'string' && sessionDownloadDirectories.has(resolve(currentDirectory))
+      ? resolve(currentDirectory)
+      : getDefaultMusicDirectory()
+    const result = await dialog.showOpenDialog({
+      title: '选择音乐保存位置',
+      defaultPath,
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    const directory = resolve(result.filePaths[0])
+    sessionDownloadDirectories.add(directory)
+    return directory
+  })
+  ipcMain.handle('music:import-remote', async (event, input: MusicRemoteImport) => {
+    const checked = checkedRemoteImport(input)
+    const report: ProgressReporter = (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send('music:import-progress', { ...progress, taskId: checked.taskId, source: checked.source } satisfies MusicImportProgress)
+    }
+    return checked.source === 'youtube'
+      ? importYoutube(checked.url, checked.directory, report)
+      : importAudioUrl(checked.url, checked.directory, report)
   })
   ipcMain.handle('music:relocate', async (_event, trackId: string) => {
     const result = await dialog.showOpenDialog({

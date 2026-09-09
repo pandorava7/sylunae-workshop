@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, SiyueAPI } from '../../src/shared/types'
+import type { AppSnapshot, MusicImportProgress, SiyueAPI } from '../../src/shared/types'
 
 const api: SiyueAPI = {
   platform: 'electron',
@@ -10,6 +10,14 @@ const api: SiyueAPI = {
   },
   music: {
     pick: () => ipcRenderer.invoke('music:pick'),
+    getDownloadDirectory: () => ipcRenderer.invoke('music:get-download-directory'),
+    pickDownloadDirectory: (currentDirectory) => ipcRenderer.invoke('music:pick-download-directory', currentDirectory),
+    importRemote: (input) => ipcRenderer.invoke('music:import-remote', input),
+    onImportProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: MusicImportProgress) => listener(progress)
+      ipcRenderer.on('music:import-progress', handler)
+      return () => ipcRenderer.removeListener('music:import-progress', handler)
+    },
     relocate: (trackId) => ipcRenderer.invoke('music:relocate', trackId),
     checkPaths: (paths) => ipcRenderer.invoke('music:check-paths', paths),
     getAudioUrl: (path) => ipcRenderer.invoke('music:get-url', path),

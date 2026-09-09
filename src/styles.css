@@ -236,6 +236,7 @@ input, textarea, select { color: var(--text); }
 .collection-state.state-4 { background: #7b6e97; }
 .collection-state.state-5 { background: #7a7f86; }
 .collection-score { right: 10px; padding: 0 8px; gap: 3px; background: rgba(24, 25, 28, .66); color: #ffd51f; }
+.collection-score.website-score { background: rgba(90, 94, 102, .78); color: #d8dadd; }
 .collection-title { position: absolute; z-index: 1; left: 12px; right: 12px; bottom: 11px; color: #fff; text-shadow: 0 1px 5px rgba(0, 0, 0, .45); }
 .collection-title h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 700; }
 .collection-title span { display: block; margin-top: 2px; color: rgba(255, 255, 255, .76); font-size: 12px; }
@@ -307,6 +308,45 @@ input, textarea, select { color: var(--text); }
 .music-library-toolbar [data-slot='tabs-trigger'] { height: 40px; padding-inline: 2px; gap: 6px; font-size: 12px; }
 .music-library-toolbar [data-slot='tabs-trigger'] > span { color: var(--faint); font-size: 11px; }
 .music-library-toolbar .search-box { min-width: min(310px, 48%); }
+.music-import-dialog { max-width: 520px; padding: 22px; }
+.music-import-dialog [data-slot='dialog-footer'] { margin: 6px -22px -22px; }
+.music-import-methods { display: flex; flex-direction: column; gap: 9px; }
+.music-import-methods > button { width: 100%; min-height: 74px; padding: 13px 14px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.music-import-methods > button:hover { border-color: color-mix(in srgb, var(--brand) 42%, var(--line)); background: var(--accent-soft); transform: translateY(-1px); }
+.music-import-methods > button:focus-visible, .music-import-directory:focus-visible, .music-import-back:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.music-import-methods > button > span { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 11px; background: var(--surface-2); color: var(--brand); }
+.music-import-methods > button > span svg { width: 20px; }
+.music-import-methods strong, .music-import-methods small { display: block; }
+.music-import-methods strong { font-size: 13px; font-weight: 600; }
+.music-import-methods small { margin-top: 4px; color: var(--muted-text); font-size: 12px; line-height: 1.4; }
+.music-import-header { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; gap: 10px; }
+.music-import-back { width: 30px; height: 30px; margin-top: -6px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted-text); cursor: pointer; }
+.music-import-back:hover { background: var(--surface-2); color: var(--text); }
+.music-import-back svg { width: 17px; }
+.music-import-form { display: flex; flex-direction: column; gap: 7px; }
+.music-import-form > label { margin-top: 5px; color: var(--muted-text); font-size: 12px; }
+.music-import-form input { font-size: 12px; }
+.music-import-directory { width: 100%; min-height: 42px; padding: 8px 10px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--muted-text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.music-import-directory:hover { border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); background: var(--surface-2); }
+.music-import-directory svg { width: 17px; color: var(--brand); }
+.music-import-directory span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-import-directory strong { color: var(--brand); font-size: 12px; font-weight: 600; }
+.music-import-hint { margin: 2px 0 0; color: var(--faint); font-size: 11px; line-height: 1.5; }
+.music-import-progress { margin-top: 7px; padding: 12px; border: 1px solid color-mix(in srgb, var(--brand) 22%, var(--line)); border-radius: 10px; background: var(--accent-soft); }
+.music-import-progress-label { min-height: 18px; margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.music-import-progress-label strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.music-import-progress-label span { flex: 0 0 auto; color: var(--brand); font-size: 12px; font-variant-numeric: tabular-nums; }
+.music-import-progress [data-slot='progress'] { height: 5px; background: color-mix(in srgb, var(--brand) 13%, var(--surface)); }
+.music-import-progress [data-slot='progress-indicator'] { background: var(--brand); }
+.music-import-progress [data-slot='progress'].indeterminate [data-slot='progress-indicator'] { width: 42%; flex: none; animation: music-import-indeterminate 1.25s ease-in-out infinite; }
+.music-import-progress small { display: block; margin-top: 7px; color: var(--muted-text); font-size: 11px; }
+.music-import-stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.music-import-stages span { min-width: 0; padding: 6px 3px; border-radius: 7px; background: color-mix(in srgb, var(--surface) 65%, transparent); color: var(--faint); font-size: 11px; text-align: center; }
+.music-import-stages span.done { background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success); }
+.music-import-stages span.active { background: var(--brand); color: var(--primary-foreground); }
+.music-import-error { margin: 2px 0 0; color: var(--danger); font-size: 12px; line-height: 1.5; }
+.music-import-dialog .spinner.small { width: 14px; height: 14px; border-width: 1.5px; }
+@keyframes music-import-indeterminate { from { transform: translateX(-110%); } to { transform: translateX(245%); } }
 .music-album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 18px 14px; }
 .music-album-card { min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .music-album-card:hover { border-color: color-mix(in srgb, var(--brand) 28%, var(--line)); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(30, 27, 24, .11); }
