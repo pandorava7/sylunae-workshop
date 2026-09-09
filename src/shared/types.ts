@@ -1,7 +1,8 @@
 import type { JSONContent } from '@tiptap/react'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
-export type ToolId = 'tasks' | 'notes' | 'music' | 'collection' | 'tools' | 'settings'
+export type WorkspaceToolId = 'tasks' | 'notes' | 'music' | 'collection' | 'tools'
+export type ToolId = 'home' | WorkspaceToolId | 'settings'
 
 export interface ThemePalette {
   bg: string
@@ -33,7 +34,30 @@ export interface AppSettings {
   lastTool: ToolId
   sidebarCollapsed: boolean
   bangumiUsername: string
+  homeWallpaper: string
+  weatherLocation: WeatherLocation
+  weatherCache: WeatherSnapshot | null
+  recentTools: WorkspaceToolId[]
+  toolUsage: Partial<Record<WorkspaceToolId, string>>
   updatedAt: string
+}
+
+export interface WeatherLocation {
+  name: string
+  country: string
+  admin1: string
+  latitude: number
+  longitude: number
+  timezone: string
+}
+
+export interface WeatherSnapshot {
+  location: WeatherLocation
+  temperature: number
+  apparent: number
+  code: number
+  daily: Array<{ minimum: number; maximum: number; code: number }>
+  fetchedAt: string
 }
 
 export type BangumiSubjectType = 1 | 2 | 3 | 4 | 6

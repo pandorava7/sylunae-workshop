@@ -25,7 +25,7 @@ import { isImageNodeSelection, NoteImage, readImageFile } from '../editor/noteIm
 
 type FolderFilter = 'all' | 'trash' | string
 
-export function NotesPage() {
+export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) {
   const { snapshot, update } = useAppStore()
   const notes = snapshot?.notes || []
   const folders = snapshot?.folders || []
@@ -34,6 +34,7 @@ export function NotesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
+  const createdOnOpen = useRef(false)
   const selected = notes.find((note) => note.id === selectedId) || null
 
   const visibleNotes = useMemo(() => {
@@ -66,6 +67,11 @@ export function NotesPage() {
     update((state) => ({ ...state, notes: [note, ...state.notes] }))
     setFolderFilter('all'); setSelectedId(note.id)
   }
+  useEffect(() => {
+    if (!createOnOpen || createdOnOpen.current) return
+    createdOnOpen.current = true
+    addNote()
+  }, [createOnOpen])
   const addFolder = (name: string) => {
     const now = nowIso(); const id = newId()
     update((state) => ({ ...state, folders: [...state.folders, { id, name, createdAt: now, updatedAt: now }] }))

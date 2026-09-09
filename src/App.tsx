@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
-import type { MusicTrack, ToolId } from './shared/types'
+import type { MusicTrack, ToolId, WorkspaceToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -11,6 +11,7 @@ const NotesPage = lazy(() => import('./pages/NotesPage').then((module) => ({ def
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })))
 const CollectionPage = lazy(() => import('./pages/CollectionPage').then((module) => ({ default: module.CollectionPage })))
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })))
+const HomePage = lazy(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
 
 export default function App() {
@@ -21,6 +22,8 @@ export default function App() {
   const [musicMounted, setMusicMounted] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
   const [pageScrolled, setPageScrolled] = useState(false)
+  const [activeTool, setActiveTool] = useState<ToolId>('home')
+  const [homeIntent, setHomeIntent] = useState<'new-note' | 'todos' | 'pomodoro' | 'clipboard' | null>(null)
 
   useEffect(() => {
     if (!snapshot) return
@@ -46,28 +49,45 @@ export default function App() {
     if (snapshot?.settings.lastTool !== 'settings') return
     setSettingsMounted(true)
     setSettingsOpen(true)
-    update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'tasks', updatedAt: new Date().toISOString() } }))
+    update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'home', updatedAt: new Date().toISOString() } }))
   }, [snapshot?.settings.lastTool, update])
 
   useEffect(() => {
-    if (snapshot?.settings.lastTool === 'music') setMusicMounted(true)
-  }, [snapshot?.settings.lastTool])
+    if (activeTool === 'music') setMusicMounted(true)
+  }, [activeTool])
 
-  useEffect(() => setPageScrolled(false), [snapshot?.settings.lastTool])
+  useEffect(() => setPageScrolled(false), [activeTool])
 
   if (loading || !snapshot) return <div className="app-loading"><Spinner /><span>正在打开丝月工坊…</span></div>
 
-  const selectTool = (tool: ToolId) => update((state) => ({ ...state, settings: { ...state.settings, lastTool: tool, updatedAt: new Date().toISOString() } }))
+  const selectTool = (tool: ToolId) => {
+    setHomeIntent(null)
+    setActiveTool(tool)
+    update((state) => {
+      const recentTools = tool !== 'home' && tool !== 'settings' ? [tool as WorkspaceToolId, ...state.settings.recentTools.filter((item) => item !== tool)].slice(0, 5) : state.settings.recentTools
+      const toolUsage = tool !== 'home' && tool !== 'settings' ? { ...state.settings.toolUsage, [tool]: new Date().toISOString() } : state.settings.toolUsage
+      return { ...state, settings: { ...state.settings, lastTool: tool, recentTools, toolUsage, updatedAt: new Date().toISOString() } }
+    })
+  }
+  const openFromHome = (tool: ToolId, intent?: 'new-note' | 'todos' | 'pomodoro' | 'clipboard') => {
+    setHomeIntent(intent ?? null)
+    setActiveTool(tool)
+    update((state) => {
+      if (tool === 'home' || tool === 'settings') return state
+      const recentTools = [tool as WorkspaceToolId, ...state.settings.recentTools.filter((item) => item !== tool)].slice(0, 5)
+      return { ...state, settings: { ...state.settings, lastTool: tool, recentTools, toolUsage: { ...state.settings.toolUsage, [tool]: new Date().toISOString() }, updatedAt: new Date().toISOString() } }
+    })
+  }
   const toggleSidebar = () => update((state) => ({ ...state, settings: { ...state.settings, sidebarCollapsed: !state.settings.sidebarCollapsed, updatedAt: new Date().toISOString() } }))
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
-  const activeTool = snapshot.settings.lastTool === 'settings' ? 'tasks' : snapshot.settings.lastTool
   const page = {
-    tasks: <TasksPage />,
+    home: <HomePage onOpenTool={openFromHome} />,
+    tasks: <TasksPage initialView={homeIntent === 'todos' ? 'todos' : homeIntent === 'pomodoro' ? 'pomodoro' : 'goals'} startPomodoro={homeIntent === 'pomodoro'} />,
     collection: <CollectionPage />,
-    tools: <ToolsPage />,
+    tools: <ToolsPage initialView={homeIntent === 'clipboard' ? 'clipboard' : 'home'} />,
     music: null,
-    notes: <NotesPage />,
-  }[activeTool]
+    notes: <NotesPage createOnOpen={homeIntent === 'new-note'} />,
+  }[activeTool === 'settings' ? 'home' : activeTool]
 
   return <TooltipProvider><div className="app-shell">
     <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />

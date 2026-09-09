@@ -4,15 +4,23 @@ import { normalizeThemePalettes } from '../shared/theme'
 
 const timestamp = z.string().min(1)
 const jsonContentSchema: z.ZodType<Record<string, unknown>> = z.lazy(() => z.object({ type: z.string().optional(), text: z.string().optional(), attrs: z.record(z.string(), z.unknown()).optional(), marks: z.array(z.unknown()).optional(), content: z.array(jsonContentSchema).optional() }).passthrough())
+const weatherLocationSchema = z.object({ name: z.string(), country: z.string(), admin1: z.string(), latitude: z.number(), longitude: z.number(), timezone: z.string() })
+const defaultWeatherLocation = { name: '吉隆坡', country: '马来西亚', admin1: '', latitude: 3.139, longitude: 101.6869, timezone: 'Asia/Kuala_Lumpur' }
+const weatherSnapshotSchema = z.object({ location: weatherLocationSchema, temperature: z.number(), apparent: z.number(), code: z.number(), daily: z.array(z.object({ minimum: z.number(), maximum: z.number(), code: z.number() })), fetchedAt: timestamp })
 const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']),
   themePalettes: z.object({
     light: z.record(z.string(), z.string()),
     dark: z.record(z.string(), z.string()),
   }).optional(),
-  lastTool: z.enum(['library', 'goals', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
+  lastTool: z.enum(['library', 'goals', 'home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
   sidebarCollapsed: z.boolean(),
   bangumiUsername: z.string(),
+  homeWallpaper: z.string().optional().default(''),
+  weatherLocation: weatherLocationSchema.optional().default(defaultWeatherLocation),
+  weatherCache: weatherSnapshotSchema.nullable().optional().default(null),
+  recentTools: z.array(z.enum(['tasks', 'notes', 'music', 'collection', 'tools'])).optional().default([]),
+  toolUsage: z.partialRecord(z.enum(['tasks', 'notes', 'music', 'collection', 'tools']), z.string()).optional().default({}),
   updatedAt: timestamp,
 })
 const bangumiItemSchema = z.object({

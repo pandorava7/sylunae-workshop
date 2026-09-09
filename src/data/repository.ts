@@ -48,7 +48,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const music = reconcileMusicLibrary(snapshot.tracks ?? [], snapshot.albums ?? [])
   const legacyTool = snapshot.settings?.lastTool as string | undefined
   const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
-  const lastTool = ['tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
+  const lastTool = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
   return {
     ...defaults,
     ...snapshot,

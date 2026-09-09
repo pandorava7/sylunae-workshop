@@ -17,8 +17,8 @@ const toolCards = [
   { id: 'image' as const, title: '图片转换 / 压缩', description: '在本地转换 JPG、PNG、WebP，并自由控制图片质量。', icon: FileImage, accent: 'green' },
 ]
 
-export function ToolsPage() {
-  const [view, setView] = useState<ToolView>('home')
+export function ToolsPage({ initialView = 'home' }: { initialView?: ToolView }) {
+  const [view, setView] = useState<ToolView>(initialView)
   const pageRef = useRef<HTMLElement>(null)
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
   return <section ref={pageRef} className="page tools-page">

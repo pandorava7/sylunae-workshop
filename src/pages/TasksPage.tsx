@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 
-type TaskView = 'goals' | 'todos' | 'pomodoro' | 'countdown'
+export type TaskView = 'goals' | 'todos' | 'pomodoro' | 'countdown'
 
 const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
   goals: { label: '目标追踪', icon: Target },
@@ -18,8 +18,8 @@ const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
   countdown: { label: '倒数日', icon: CalendarClock },
 }
 
-export function TasksPage() {
-  const [view, setView] = useState<TaskView>('goals')
+export function TasksPage({ initialView = 'goals', startPomodoro = false }: { initialView?: TaskView; startPomodoro?: boolean }) {
+  const [view, setView] = useState<TaskView>(initialView)
   const pageRef = useRef<HTMLElement>(null)
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
   return <section ref={pageRef} className="page tasks-page">
@@ -29,7 +29,7 @@ export function TasksPage() {
     </Tabs>
     {view === 'goals' && <GoalsPage embedded />}
     {view === 'todos' && <TodoPanel />}
-    {view === 'pomodoro' && <PomodoroPanel />}
+    {view === 'pomodoro' && <PomodoroPanel autoStart={startPomodoro} />}
     {view === 'countdown' && <CountdownPlaceholder />}
   </section>
 }
@@ -72,11 +72,18 @@ function TodoPanel() {
 
 const modeLabels: Record<PomodoroMode, string> = { focus: '专注', shortBreak: '短休息', longBreak: '长休息' }
 
-function PomodoroPanel() {
+function PomodoroPanel({ autoStart = false }: { autoStart?: boolean }) {
   const { snapshot, update } = useAppStore()
   const timer = snapshot!.pomodoro
+  const autoStarted = useRef(false)
   const [editing, setEditing] = useState(false)
   const [draftConfig, setDraftConfig] = useState({ focusMinutes: String(timer.focusMinutes), shortBreakMinutes: String(timer.shortBreakMinutes), longBreakMinutes: String(timer.longBreakMinutes), sessionsBeforeLongBreak: String(timer.sessionsBeforeLongBreak) })
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || timer.running) return
+    autoStarted.current = true
+    update((state) => ({ ...state, pomodoro: { ...state.pomodoro, running: true, endsAt: new Date(Date.now() + state.pomodoro.secondsRemaining * 1000).toISOString() } }))
+  }, [autoStart, timer.running, update])
 
   useEffect(() => {
     if (!timer.running || !timer.endsAt) return
