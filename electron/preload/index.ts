@@ -13,6 +13,8 @@ const api: SiyueAPI = {
     relocate: (trackId) => ipcRenderer.invoke('music:relocate', trackId),
     checkPaths: (paths) => ipcRenderer.invoke('music:check-paths', paths),
     getAudioUrl: (path) => ipcRenderer.invoke('music:get-url', path),
+    readMetadata: (path) => ipcRenderer.invoke('music:read-metadata', path),
+    updateMetadata: (update) => ipcRenderer.invoke('music:update-metadata', update),
   },
   backup: {
     exportFile: (contents) => ipcRenderer.invoke('backup:export', contents),

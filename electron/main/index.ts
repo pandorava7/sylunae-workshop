@@ -3,10 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
-import type { AppSnapshot, MusicTrack } from '../../src/shared/types'
+import type { AppSnapshot, MusicEditableMetadata, MusicMetadataUpdate, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
 const sessionMediaPaths = new Set<string>()
+let tagLibPromise: ReturnType<typeof initializeTagLib> | null = null
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'siyue-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
@@ -14,6 +15,95 @@ protocol.registerSchemesAsPrivileged([
 
 function isIndexedPath(filePath: string): boolean {
   return sessionMediaPaths.has(filePath) || loadSnapshot().tracks.some((track) => track.path === filePath)
+}
+
+async function initializeTagLib() {
+  const { TagLib } = await import('taglib-wasm')
+  return TagLib.initialize()
+}
+
+function getTagLib() {
+  tagLibPromise ??= initializeTagLib()
+  return tagLibPromise
+}
+
+function assertEditableAudioPath(filePath: string): void {
+  if (typeof filePath !== 'string' || !isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extname(filePath).toLowerCase())) {
+    throw new Error('音乐文件不可用或未加入资料库')
+  }
+}
+
+async function readEditableMetadata(filePath: string): Promise<MusicEditableMetadata> {
+  assertEditableAudioPath(filePath)
+  const { parseFile } = await import('music-metadata')
+  const parsed = await parseFile(filePath)
+  const indexed = loadSnapshot().tracks.find((track) => track.path === filePath)
+  const picture = parsed.common.picture?.[0]
+  const indexedArtist = indexed?.artist === '未知艺术家' ? '' : indexed?.artist
+  const indexedAlbum = indexed?.album === '未知专辑' ? '' : indexed?.album
+  return {
+    title: parsed.common.title?.trim() || indexed?.title || basename(filePath, extname(filePath)),
+    artist: parsed.common.artist?.trim() || indexedArtist || '',
+    album: parsed.common.album?.trim() || indexedAlbum || '',
+    genre: parsed.common.genre?.filter(Boolean).join('; ') || '',
+    year: parsed.common.year || null,
+    track: parsed.common.track.no || null,
+    comment: parsed.common.comment?.map((item) => item.text?.trim()).filter(Boolean).join('\n') || '',
+    cover: picture
+      ? `data:${picture.format};base64,${Buffer.from(picture.data).toString('base64')}`
+      : indexed?.cover || '',
+  }
+}
+
+function checkedText(value: unknown, label: string, maxLength: number): string {
+  if (typeof value !== 'string' || value.length > maxLength) throw new Error(`${label}内容无效`)
+  return value.trim()
+}
+
+function checkedNumber(value: unknown, label: string): number {
+  if (value === null) return 0
+  if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > 9999) throw new Error(`${label}内容无效`)
+  return Number(value)
+}
+
+function checkedCover(update: MusicMetadataUpdate['cover']): MusicMetadataUpdate['cover'] {
+  if (!update || !['keep', 'remove', 'replace'].includes(update.mode)) throw new Error('封面操作无效')
+  if (update.mode !== 'replace') return update
+  const data = new Uint8Array(update.data)
+  if (data.byteLength === 0 || data.byteLength > 12 * 1024 * 1024) throw new Error('封面文件需小于 12 MB')
+  const isJpeg = update.mimeType === 'image/jpeg' && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
+  const isPng = update.mimeType === 'image/png' && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47
+  if (!isJpeg && !isPng) throw new Error('仅支持 JPEG 或 PNG 封面')
+  return { mode: 'replace', data, mimeType: update.mimeType }
+}
+
+async function updateTrackMetadata(update: MusicMetadataUpdate): Promise<MusicTrack> {
+  if (!update || typeof update.id !== 'string') throw new Error('曲目信息无效')
+  assertEditableAudioPath(update.path)
+  const metadata = {
+    title: checkedText(update.metadata?.title, '标题', 1024),
+    artist: checkedText(update.metadata?.artist, '艺术家', 1024),
+    album: checkedText(update.metadata?.album, '专辑', 1024),
+    genre: checkedText(update.metadata?.genre, '流派', 1024),
+    comment: checkedText(update.metadata?.comment, '备注', 10_000),
+    year: checkedNumber(update.metadata?.year, '年份'),
+    track: checkedNumber(update.metadata?.track, '音轨号'),
+  }
+  const cover = checkedCover(update.cover)
+  const tagLib = await getTagLib()
+  await tagLib.edit(update.path, (file) => {
+    file.tag()
+      .setTitle(metadata.title)
+      .setArtist(metadata.artist)
+      .setAlbum(metadata.album)
+      .setGenre(metadata.genre)
+      .setYear(metadata.year)
+      .setTrack(metadata.track)
+      .setComment(metadata.comment)
+    if (cover.mode === 'remove') file.removePictures()
+    if (cover.mode === 'replace') file.setPictures([{ type: 'FrontCover', mimeType: cover.mimeType, data: cover.data, description: 'Album cover' }])
+  })
+  return parseTrack(update.path, update.id)
 }
 
 async function parseTrack(filePath: string, id: string = crypto.randomUUID()): Promise<MusicTrack> {
@@ -53,6 +143,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   })
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -99,6 +190,8 @@ function registerIpc(): void {
     }
     return `siyue-media://audio/${Buffer.from(filePath).toString('base64url')}`
   })
+  ipcMain.handle('music:read-metadata', (_event, filePath: string) => readEditableMetadata(filePath))
+  ipcMain.handle('music:update-metadata', (_event, update: MusicMetadataUpdate) => updateTrackMetadata(update))
 
   ipcMain.handle('backup:export', async (_event, contents: string) => {
     const result = await dialog.showSaveDialog({

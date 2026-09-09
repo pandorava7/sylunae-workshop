@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
-import type { ToolId } from './shared/types'
+import type { MusicTrack, ToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -17,6 +17,8 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsMounted, setSettingsMounted] = useState(false)
+  const [musicMounted, setMusicMounted] = useState(false)
+  const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
 
   useEffect(() => {
     if (!snapshot) return
@@ -45,6 +47,10 @@ export default function App() {
     update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'library', updatedAt: new Date().toISOString() } }))
   }, [snapshot?.settings.lastTool, update])
 
+  useEffect(() => {
+    if (snapshot?.settings.lastTool === 'music') setMusicMounted(true)
+  }, [snapshot?.settings.lastTool])
+
   if (loading || !snapshot) return <div className="app-loading"><Spinner /><span>正在打开丝月工坊…</span></div>
 
   const selectTool = (tool: ToolId) => update((state) => ({ ...state, settings: { ...state.settings, lastTool: tool, updatedAt: new Date().toISOString() } }))
@@ -53,16 +59,19 @@ export default function App() {
   const activeTool = snapshot.settings.lastTool === 'settings' ? 'library' : snapshot.settings.lastTool
   const page = {
     library: <LibraryPage />,
-    music: <MusicPage />,
+    music: null,
     notes: <NotesPage />,
     goals: <GoalsPage />,
   }[activeTool]
 
   return <TooltipProvider><div className="app-shell">
-    <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} settingsOpen={settingsOpen} onSelect={selectTool} onOpenSettings={openSettings} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
+    <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
     <main className="content-shell">
       <div className="window-drag" />
-      <Suspense fallback={<div className="app-loading"><Spinner /></div>}>{page}</Suspense>
+      <Suspense fallback={<div className="app-loading"><Spinner /></div>}>
+        {page}
+        {(musicMounted || activeTool === 'music') && <div className="persistent-page" hidden={activeTool !== 'music'}><MusicPage onNowPlayingChange={setNowPlaying} /></div>}
+      </Suspense>
       <div className={`save-indicator ${error ? 'error' : ''}`}>{error || (saving ? '正在保存…' : '')}</div>
     </main>
     <Suspense fallback={null}>{settingsMounted && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />}</Suspense>

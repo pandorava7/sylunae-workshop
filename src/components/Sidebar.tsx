@@ -1,5 +1,6 @@
+import { useEffect, useState, type CSSProperties } from 'react'
 import { BookHeart, ChevronLeft, ChevronRight, Download, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
-import type { ToolId } from '../shared/types'
+import type { MusicTrack, ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
 
 const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
@@ -32,17 +33,24 @@ function downloadDesktopApp() {
     .catch(() => openExternal('https://github.com/pandorava7/sylunae-kit/releases/latest'))
 }
 
-export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
+export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlaying, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
   active: ToolId
   collapsed: boolean
   mobileOpen: boolean
   settingsOpen: boolean
+  nowPlaying: MusicTrack | null
   onSelect: (tool: ToolId) => void
   onOpenSettings: () => void
   onToggle: () => void
   onOpen: () => void
   onClose: () => void
 }) {
+  const [displayTrack, setDisplayTrack] = useState<MusicTrack | null>(nowPlaying)
+
+  useEffect(() => {
+    if (nowPlaying) setDisplayTrack(nowPlaying)
+  }, [nowPlaying])
+
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
   const openSettings = () => { onOpenSettings(); onClose() }
   return <>
@@ -53,6 +61,18 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, onSelect,
       <div className="brand">
         <BrandMark />
         {!collapsed && <div><strong>丝月工坊</strong><span>MY QUIET SPACE</span></div>}
+      </div>
+      <div className={`now-playing-slot ${nowPlaying ? 'visible' : ''}`} aria-hidden={!nowPlaying}>
+        <button
+          className="sidebar-now-playing"
+          onClick={() => select('music')}
+          tabIndex={nowPlaying ? 0 : -1}
+          title={displayTrack ? `正在播放：${displayTrack.title}` : undefined}
+          style={{ '--now-playing-cover': displayTrack?.cover ? `url(${displayTrack.cover})` : 'none' } as CSSProperties}
+        >
+          <span className="music-wave" aria-hidden><i /><i /><i /><i /></span>
+          <span className="now-playing-copy"><strong>{displayTrack?.title || '正在播放'}</strong><small>{displayTrack?.artist || '未知艺术家'}</small></span>
+        </button>
       </div>
       <nav>
         {!collapsed && <div className="nav-caption">工具</div>}

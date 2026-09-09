@@ -80,6 +80,29 @@ export interface MusicTrack {
   updatedAt: string
 }
 
+export interface MusicEditableMetadata {
+  title: string
+  artist: string
+  album: string
+  genre: string
+  year: number | null
+  track: number | null
+  comment: string
+  cover: string
+}
+
+export type MusicCoverUpdate =
+  | { mode: 'keep' }
+  | { mode: 'remove' }
+  | { mode: 'replace'; data: Uint8Array; mimeType: 'image/jpeg' | 'image/png' }
+
+export interface MusicMetadataUpdate {
+  id: string
+  path: string
+  metadata: Omit<MusicEditableMetadata, 'cover'>
+  cover: MusicCoverUpdate
+}
+
 export interface NoteFolder {
   id: string
   name: string
@@ -159,6 +182,8 @@ export interface SiyueAPI {
     relocate: (trackId: string) => Promise<MusicTrack | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getAudioUrl: (path: string) => Promise<string>
+    readMetadata: (path: string) => Promise<MusicEditableMetadata>
+    updateMetadata: (update: MusicMetadataUpdate) => Promise<MusicTrack>
   }
   backup: {
     exportFile: (contents: string) => Promise<boolean>

@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
+import { Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
-import type { MusicTrack } from '../shared/types'
+import type { MusicMetadataUpdate, MusicTrack } from '../shared/types'
 import { formatDuration } from '../utils'
 import { EmptyState } from '../components/Icons'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Slider } from '../components/ui/slider'
+import { MusicMetadataSheet } from '../components/MusicMetadataSheet'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
-export function MusicPage() {
+export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: MusicTrack | null) => void }) {
   const { snapshot, update } = useAppStore()
   const tracks = snapshot?.tracks || []
   const [query, setQuery] = useState('')
@@ -24,7 +25,9 @@ export function MusicPage() {
   const [repeat, setRepeat] = useState<RepeatMode>('off')
   const [playerError, setPlayerError] = useState('')
   const [removeTarget, setRemoveTarget] = useState<MusicTrack | null>(null)
+  const [editTarget, setEditTarget] = useState<MusicTrack | null>(null)
   const audio = useRef<HTMLAudioElement>(null)
+  const releasingForEdit = useRef(false)
   const current = tracks.find((track) => track.id === currentId) || null
   const filtered = useMemo(() => tracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query.toLowerCase())), [tracks, query])
 
@@ -38,6 +41,10 @@ export function MusicPage() {
   }, [])
 
   useEffect(() => { if (audio.current) audio.current.volume = volume }, [volume])
+
+  useEffect(() => {
+    onNowPlayingChange(playing ? current : null)
+  }, [current, playing, onNowPlayingChange])
 
   const addTracks = async () => {
     if (!window.siyue) return
@@ -100,6 +107,45 @@ export function MusicPage() {
     update((state) => ({ ...state, tracks: state.tracks.map((item) => item.id === track.id ? { ...replacement, createdAt: item.createdAt } : item) }))
   }
 
+  const saveMetadata = async (input: MusicMetadataUpdate) => {
+    if (!window.siyue) return
+    const element = audio.current
+    const isCurrent = currentId === input.id && Boolean(element?.src)
+    const wasPlaying = isCurrent && playing
+    const resumeAt = isCurrent ? element?.currentTime || 0 : 0
+    if (isCurrent && element) {
+      releasingForEdit.current = true
+      element.pause()
+      element.removeAttribute('src')
+      element.load()
+    }
+    try {
+      const replacement = await window.siyue.music.updateMetadata(input)
+      update((state) => ({ ...state, tracks: state.tracks.map((item) => item.id === input.id ? { ...replacement, createdAt: item.createdAt } : item) }))
+    } finally {
+      if (isCurrent && element) {
+        try {
+          const url = await window.siyue.music.getAudioUrl(input.path)
+          element.src = url
+          await new Promise<void>((resolve, reject) => {
+            const loaded = () => { cleanup(); resolve() }
+            const failed = () => { cleanup(); reject(new Error('reload failed')) }
+            const cleanup = () => { element.removeEventListener('loadedmetadata', loaded); element.removeEventListener('error', failed) }
+            element.addEventListener('loadedmetadata', loaded)
+            element.addEventListener('error', failed)
+            element.load()
+          })
+          element.currentTime = Math.min(resumeAt, element.duration || resumeAt)
+          if (wasPlaying) await element.play()
+        } catch {
+          setPlayerError('元信息已保存，但播放器重新加载文件失败。')
+        } finally {
+          releasingForEdit.current = false
+        }
+      }
+    }
+  }
+
   if (!window.siyue) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
 
   return <section className="page music-page">
@@ -116,16 +162,17 @@ export function MusicPage() {
         <button className="track-play" disabled={track.missing} onClick={() => currentId === track.id ? togglePlay() : void playTrack(track)}>{currentId === track.id && playing ? <Pause size={15} /> : <span>{index + 1}</span>}</button>
         <div className="track-title"><div className="tiny-cover">{track.cover ? <img src={track.cover} alt="" /> : <Music2 size={15} />}</div><div><strong>{track.title}</strong><span>{track.missing ? '文件已移动或删除' : track.artist}</span></div></div>
         <span className="track-album">{track.album}</span><span>{formatDuration(track.duration)}</span>
-        <div className="track-actions">{track.missing && <button onClick={() => void relocate(track)} title="重新定位"><LocateFixed size={16} /></button>}<button onClick={() => setRemoveTarget(track)} title="移除索引"><Trash2 size={16} /></button></div>
+        <div className="track-actions">{track.missing && <button onClick={() => void relocate(track)} title="重新定位"><LocateFixed size={16} /></button>}<button disabled={track.missing} onClick={() => setEditTarget(track)} title="编辑元信息"><PencilLine size={16} /></button><button onClick={() => setRemoveTarget(track)} title="移除索引"><Trash2 size={16} /></button></div>
       </div>)}</div>}
 
     <div className={`player-bar ${current ? 'visible' : ''}`}>
-      <audio ref={audio} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)} onEnded={onEnded} onError={() => { setPlayerError('音频加载失败'); setPlaying(false) }} />
+      <audio ref={audio} onPlay={() => setPlaying(true)} onPause={() => { if (!releasingForEdit.current) setPlaying(false) }} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)} onEnded={onEnded} onError={() => { if (!releasingForEdit.current) { setPlayerError('音频加载失败'); setPlaying(false) } }} />
       <div className="player-track"><div className="tiny-cover large">{current?.cover ? <img src={current.cover} alt="" /> : <ListMusic size={17} />}</div><div><strong>{current?.title || '未选择'}</strong><span>{current?.artist || '—'}</span></div></div>
       <div className="player-center"><div className="player-controls"><button className={shuffle ? 'active' : ''} onClick={() => setShuffle(!shuffle)}><Shuffle size={16} /></button><button onClick={() => adjacent(-1)}><SkipBack size={18} fill="currentColor" /></button><button className="play-main" onClick={togglePlay}>{playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button><button onClick={() => adjacent(1)}><SkipForward size={18} fill="currentColor" /></button><button className={repeat !== 'off' ? 'active' : ''} onClick={() => setRepeat(repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off')}>{repeat === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}</button></div>
         <div className="progress-control"><span>{formatDuration(position)}</span><Slider min={0} max={Math.max(duration, 1)} step={1} value={[Math.min(position, duration || 0)]} onValueChange={([value]) => { if (audio.current) audio.current.currentTime = value }} aria-label="播放进度" /><span>{formatDuration(duration)}</span></div></div>
       <div className="volume-control">{volume < 0.05 ? <Volume1 size={17} /> : <Volume2 size={17} />}<Slider min={0} max={1} step={0.01} value={[volume]} onValueChange={([value]) => setVolume(value)} aria-label="音量" /></div>
     </div>
+    {editTarget && <MusicMetadataSheet track={editTarget} onClose={() => setEditTarget(null)} onSave={saveMetadata} />}
     <ConfirmDialog open={Boolean(removeTarget)} onOpenChange={(open) => { if (!open) setRemoveTarget(null) }} title="从资料库移除？" description={removeTarget ? `将移除《${removeTarget.title}》的索引，原始音乐文件不会被删除。` : ''} confirmLabel="移除索引" destructive icon={<Trash2 />} onConfirm={() => { if (removeTarget) remove(removeTarget); setRemoveTarget(null) }} />
   </section>
 }
