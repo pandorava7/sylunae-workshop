@@ -40,6 +40,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSnapshot((current) => {
       if (!current) return current
       const next = recipe(current)
+      if (next === current) return current
       latest.current = next
       if (timer.current) clearTimeout(timer.current)
       timer.current = setTimeout(() => { void persist(next) }, 350)

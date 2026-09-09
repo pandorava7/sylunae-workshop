@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
+import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -16,6 +17,8 @@ import { PromptDialog } from '../components/PromptDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { MarkdownPaste } from '../editor/markdownPaste'
+import { applyNotePatch } from '../editor/notePatch'
 
 type FolderFilter = 'all' | 'trash' | string
 
@@ -45,7 +48,15 @@ export function NotesPage() {
     else if (!selectedId && visibleNotes[0]) setSelectedId(visibleNotes[0].id)
   }, [visibleNotes, selectedId])
 
-  const saveNote = (id: string, patch: Partial<Note>) => update((state) => ({ ...state, notes: state.notes.map((note) => note.id === id ? { ...note, ...patch, updatedAt: nowIso() } : note) }))
+  const saveNote = (id: string, patch: Partial<Note>) => update((state) => {
+    const index = state.notes.findIndex((note) => note.id === id)
+    if (index < 0) return state
+    const nextNote = applyNotePatch(state.notes[index], patch, nowIso())
+    if (nextNote === state.notes[index]) return state
+    const nextNotes = [...state.notes]
+    nextNotes[index] = nextNote
+    return { ...state, notes: nextNotes }
+  })
   const addNote = () => {
     const now = nowIso()
     const note: Note = { id: newId(), title: '无标题笔记', content: { type: 'doc', content: [{ type: 'paragraph' }] }, folderId: folderFilter !== 'all' && folderFilter !== 'trash' ? folderFilter : null, tags: [], pinned: false, deletedAt: null, createdAt: now, updatedAt: now }
@@ -79,7 +90,7 @@ export function NotesPage() {
           <div><strong>{note.title || '无标题笔记'}</strong>{note.pinned && <Pin size={12} fill="currentColor" />}</div><p>{extractText(note.content).trim() || '空白笔记'}</p><span>{formatDate(note.updatedAt, true)}</span>
         </button>)}</div>
       </div>
-      <div className="editor-pane">{selected ? <NoteEditor note={selected} folders={folders} inTrash={Boolean(selected.deletedAt)} onSave={(patch) => saveNote(selected.id, patch)} onTrash={() => moveToTrash(selected)} onRestore={() => restore(selected)} onDestroy={() => setDeleteTarget(selected)} /> : <EmptyState icon={<NotebookPen size={25} />} title={folderFilter === 'trash' ? '回收站是空的' : '开始写一点什么'} description={folderFilter === 'trash' ? '删除的笔记会在这里等待你决定。' : '新建一条笔记，记下此刻的想法。'} action={folderFilter !== 'trash' ? <Button className="button primary" onClick={addNote}>新建笔记</Button> : undefined} />}</div>
+      <div className="editor-pane">{selected ? <NoteEditor key={selected.id} note={selected} folders={folders} inTrash={Boolean(selected.deletedAt)} onSave={(patch) => saveNote(selected.id, patch)} onTrash={() => moveToTrash(selected)} onRestore={() => restore(selected)} onDestroy={() => setDeleteTarget(selected)} /> : <EmptyState icon={<NotebookPen size={25} />} title={folderFilter === 'trash' ? '回收站是空的' : '开始写一点什么'} description={folderFilter === 'trash' ? '删除的笔记会在这里等待你决定。' : '新建一条笔记，记下此刻的想法。'} action={folderFilter !== 'trash' ? <Button className="button primary" onClick={addNote}>新建笔记</Button> : undefined} />}</div>
     </div>
     <PromptDialog open={creatingFolder} onOpenChange={setCreatingFolder} title="新建文件夹" description="为笔记创建一个新分类。" placeholder="文件夹名称" confirmLabel="创建" onSubmit={addFolder} />
     <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }} title="永久删除笔记？" description={deleteTarget ? `《${deleteTarget.title}》将被永久删除，此操作无法撤销。` : ''} confirmLabel="永久删除" destructive icon={<Trash2 />} onConfirm={() => { if (deleteTarget) destroy(deleteTarget); setDeleteTarget(null) }} />
@@ -89,7 +100,7 @@ export function NotesPage() {
 function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDestroy }: { note: Note; folders: { id: string; name: string }[]; inTrash: boolean; onSave: (patch: Partial<Note>) => void; onTrash: () => void; onRestore: () => void; onDestroy: () => void }) {
   const [promptKind, setPromptKind] = useState<'link' | 'image' | null>(null)
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), Image.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true })],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), Image.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), Markdown, MarkdownPaste],
     content: note.content,
     editable: !inTrash,
     editorProps: { attributes: { class: 'tiptap-editor' } },
@@ -132,7 +143,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       {action(false, '图片', <ImagePlus size={16} />, () => setPromptKind('image'))}
       {action(false, '撤销', <Undo2 size={16} />, () => { editor.chain().focus().undo().run() })}
     </div>}
-    <EditorContent editor={editor} />
+    <EditorContent className="note-editor-content" editor={editor} />
     <div className="editor-status">{inTrash ? `删除于 ${formatDate(note.deletedAt || '', true)}` : `自动保存 · ${formatDate(note.updatedAt, true)}`}</div>
     <PromptDialog open={promptKind === 'link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="添加链接" description="为当前选中文字设置链接。" initialValue={editor.getAttributes('link').href || 'https://'} placeholder="https://example.com" confirmLabel="应用链接" validate={(value) => /^https?:\/\//i.test(value) ? null : '请输入 http 或 https 链接'} onSubmit={setLink} />
     <PromptDialog open={promptKind === 'image'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="插入图片" description="支持 HTTPS 图片地址或 data URL。" placeholder="https://example.com/image.png" confirmLabel="插入图片" validate={(value) => /^https:\/\//i.test(value) || /^data:image\//i.test(value) ? null : '请输入 HTTPS 图片地址或 data URL'} onSubmit={addImage} />
