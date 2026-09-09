@@ -42,13 +42,13 @@ export interface ThemeContrastIssue {
 
 export const defaultThemePalettes: ThemePalettes = {
   light: {
-    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#f7f7f7',
+    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#eeeeee',
     text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
     accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
     success: '#4f8060', successSoft: '#eaf3ed',
   },
   dark: {
-    bg: '#171717', surface: '#1f1f1f', surface2: '#292929', surface3: '#333333', sidebarBg: '#1b1b1b',
+    bg: '#171717', surface: '#1f1f1f', surface2: '#292929', surface3: '#333333', sidebarBg: '#202020',
     text: '#ededed', mutedText: '#a1a1a1', faint: '#6f6f6f', line: '#333333', brand: '#ededed',
     accentSoft: '#2c2c2c', accentDeep: '#ffffff', danger: '#df7070', dangerSoft: '#382323',
     success: '#76a985', successSoft: '#233128',
@@ -67,6 +67,21 @@ const legacyDefaultThemePalettes: ThemePalettes = {
     text: '#e9e6e1', mutedText: '#a6a099', faint: '#77716b', line: '#373430', brand: '#a99abd',
     accentSoft: '#332d3b', accentDeep: '#c4b5d4', danger: '#d47d79', dangerSoft: '#3c2928',
     success: '#83ad90', successSoft: '#26352a',
+  },
+}
+
+const previousDefaultThemePalettes: ThemePalettes = {
+  light: {
+    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#f7f7f7',
+    text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
+    accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
+    success: '#4f8060', successSoft: '#eaf3ed',
+  },
+  dark: {
+    bg: '#171717', surface: '#1f1f1f', surface2: '#292929', surface3: '#333333', sidebarBg: '#1b1b1b',
+    text: '#ededed', mutedText: '#a1a1a1', faint: '#6f6f6f', line: '#333333', brand: '#ededed',
+    accentSoft: '#2c2c2c', accentDeep: '#ffffff', danger: '#df7070', dangerSoft: '#382323',
+    success: '#76a985', successSoft: '#233128',
   },
 }
 
@@ -141,9 +156,11 @@ export function normalizeThemePalettes(value?: Partial<Record<'light' | 'dark', 
 
 export function migrateDefaultThemePalettes(value?: Partial<Record<'light' | 'dark', Partial<ThemePalette>>>): ThemePalettes {
   const palettes = normalizeThemePalettes(value)
-  const isLegacyDefault = (['light', 'dark'] as const).every((mode) =>
-    themeColorFields.every(({ key }) => palettes[mode][key] === legacyDefaultThemePalettes[mode][key]))
-  return isLegacyDefault ? defaultThemePalettes : palettes
+  const matchesPalette = (candidate: ThemePalettes) => (['light', 'dark'] as const).every((mode) =>
+    themeColorFields.every(({ key }) => palettes[mode][key] === candidate[mode][key]))
+  return matchesPalette(legacyDefaultThemePalettes) || matchesPalette(previousDefaultThemePalettes)
+    ? defaultThemePalettes
+    : palettes
 }
 
 export function serializeThemePalettes(palettes: ThemePalettes): string {

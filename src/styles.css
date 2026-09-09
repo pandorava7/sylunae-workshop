@@ -23,7 +23,7 @@
   --surface: #ffffff;
   --surface-2: #f3f3f3;
   --surface-3: #e9e9e9;
-  --sidebar-bg: #f7f7f7;
+  --sidebar-bg: #eeeeee;
   --text: #202020;
   --muted-text: #6f6f6f;
   --faint: #9b9b9b;
@@ -37,6 +37,7 @@
   --success-soft: #eaf3ed;
   --shadow: 0 16px 45px rgba(51, 45, 38, .09);
   --card-radius: 14px;
+  --titlebar-height: 42px;
   --radius: 0.625rem;
   --background: var(--bg);
   --foreground: var(--text);
@@ -77,7 +78,7 @@
   --surface: #1f1f1f;
   --surface-2: #292929;
   --surface-3: #333333;
-  --sidebar-bg: #1b1b1b;
+  --sidebar-bg: #202020;
   --text: #ededed;
   --muted-text: #a1a1a1;
   --faint: #6f6f6f;
@@ -103,11 +104,13 @@ input, textarea, select { color: var(--text); }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-text) 34%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 20px; }
 
-.app-shell { height: 100%; display: flex; }
-.sidebar { position: relative; z-index: 40; flex: 0 0 236px; width: 236px; height: 100%; background: var(--sidebar-bg); border-right: 1px solid var(--line); padding: 38px 13px 14px; display: flex; flex-direction: column; transition: width .22s ease, flex-basis .22s ease; }
+.app-shell { height: 100%; display: flex; background: var(--sidebar-bg); }
+.sidebar { position: relative; z-index: 1; flex: 0 0 300px; width: 300px; height: 100%; background: var(--sidebar-bg);  padding: 38px 13px 14px; display: flex; flex-direction: column; transition: width .22s ease, flex-basis .22s ease; }
 .sidebar.collapsed { width: 70px; flex-basis: 70px; }
-.drag-region, .window-drag { -webkit-app-region: drag; position: absolute; top: 0; left: 0; right: 0; height: 38px; }
-.window-drag { z-index: 2; }
+.app-titlebar { position: fixed; z-index: 30; top: 0; left: 300px; right: 0; height: var(--titlebar-height); border-bottom: 1px solid transparent; background: var(--bg); transition: left .22s ease, border-color .16s ease; }
+.sidebar.collapsed ~ .app-titlebar { left: 70px; }
+.app-titlebar.scrolled { border-bottom-color: var(--line); }
+.app-titlebar-drag { position: absolute; inset: 0 138px 0 0; -webkit-app-region: drag; }
 .brand { height: 58px; padding: 7px 8px; display: flex; align-items: center; gap: 11px; overflow: hidden; white-space: nowrap; }
 .brand-mark { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 11px; background: #2f2f2f; color: #ffffff; box-shadow: 0 5px 14px rgba(47, 47, 47, .2); }
 .brand-mark.small { width: 25px; height: 25px; flex-basis: 25px; border-radius: 8px; }
@@ -158,7 +161,7 @@ input, textarea, select { color: var(--text); }
 .sidebar-footer { border-top: 1px solid var(--line); padding-top: 10px; }
 .mobile-menu, .sidebar-backdrop { display: none; }
 
-.content-shell { position: relative; flex: 1; min-width: 0; height: 100%; background: var(--bg); }
+.content-shell { position: relative; z-index: 2; flex: 1; min-width: 0; height: 100%; border-radius: 12px; background-color: var(--bg); background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 5%, transparent) 0 3px, transparent .9px); background-size: 60px 60px; box-shadow: -10px 0 28px color-mix(in srgb, var(--text) 9%, transparent); }
 .persistent-page { height: 100%; }
 .page { height: 100%; overflow: auto; padding: 61px clamp(24px, 3vw, 48px) 44px; }
 .page-header { min-height: 72px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
@@ -380,7 +383,7 @@ input, textarea, select { color: var(--text); }
 .track-album-link:hover, .track-album-link:focus-visible { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 .track-actions { display: flex; justify-content: flex-end; }
 .track-actions button, .ghost-danger { width: 28px; height: 28px; border: 0; border-radius: 7px; display: grid; place-items: center; background: transparent; color: var(--muted-text); }
-.player-bar { position: fixed; z-index: 30; left: 236px; right: 0; bottom: 0; height: 88px; padding: 10px 28px; display: grid; grid-template-columns: minmax(170px, 1fr) minmax(340px, 1.35fr) minmax(130px, 1fr); align-items: center; gap: 20px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(18px); transform: translateY(100%); transition: transform .2s ease, left .22s ease; }
+.player-bar { position: fixed; z-index: 30; left: 300px; right: 0; bottom: 0; height: 88px; padding: 10px 28px; display: grid; grid-template-columns: minmax(170px, 1fr) minmax(340px, 1.35fr) minmax(130px, 1fr); align-items: center; gap: 20px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(18px); transform: translateY(100%); transition: transform .2s ease, left .22s ease; }
 .sidebar.collapsed ~ .content-shell .player-bar { left: 70px; }
 .player-bar.visible { transform: translateY(0); }
 .player-controls { display: flex; align-items: center; justify-content: center; gap: 13px; }
@@ -650,9 +653,9 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
 }
 
 @media (max-width: 760px) {
-  .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); box-shadow: var(--shadow); }
+  .sidebar { position: fixed; z-index: 40; left: 0; top: 0; bottom: 0; transform: translateX(-100%); box-shadow: var(--shadow); }
   .sidebar.mobile-open { transform: translateX(0); }
-  .sidebar.collapsed { width: 236px; }
+  .sidebar.collapsed { width: 300px; }
   .sidebar.collapsed .brand div, .sidebar.collapsed button span { display: block; }
   .sidebar.collapsed button { justify-content: flex-start; padding: 0 12px; }
   .sidebar.collapsed .now-playing-slot.visible { max-height: 64px; }
@@ -662,7 +665,6 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
   .sidebar .desktop-download-card { display: none; }
   .sidebar-backdrop { display: block; position: fixed; z-index: 35; inset: 0; border: 0; background: rgba(20, 18, 16, .32); }
   .mobile-menu { position: fixed; display: grid; place-items: center; z-index: 25; left: 16px; top: 13px; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
-  .window-drag { left: 58px; }
   .page { padding: 61px 16px 30px; }
   .page-header h1 { font-size: 25px; }
   .page-header p { max-width: 260px; }

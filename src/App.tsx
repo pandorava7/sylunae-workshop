@@ -19,6 +19,7 @@ export default function App() {
   const [settingsMounted, setSettingsMounted] = useState(false)
   const [musicMounted, setMusicMounted] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
+  const [pageScrolled, setPageScrolled] = useState(false)
 
   useEffect(() => {
     if (!snapshot) return
@@ -51,6 +52,8 @@ export default function App() {
     if (snapshot?.settings.lastTool === 'music') setMusicMounted(true)
   }, [snapshot?.settings.lastTool])
 
+  useEffect(() => setPageScrolled(false), [snapshot?.settings.lastTool])
+
   if (loading || !snapshot) return <div className="app-loading"><Spinner /><span>正在打开丝月工坊…</span></div>
 
   const selectTool = (tool: ToolId) => update((state) => ({ ...state, settings: { ...state.settings, lastTool: tool, updatedAt: new Date().toISOString() } }))
@@ -66,8 +69,14 @@ export default function App() {
 
   return <TooltipProvider><div className="app-shell">
     <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
-    <main className="content-shell">
-      <div className="window-drag" />
+    {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''}`} aria-hidden="true"><div className="app-titlebar-drag" /></div>}
+    <main className="content-shell" onScrollCapture={(event) => {
+      const target = event.target
+      if (target instanceof HTMLElement) setPageScrolled((current) => {
+        const next = target.scrollTop > 0
+        return current === next ? current : next
+      })
+    }}>
       <Suspense fallback={<div className="app-loading"><Spinner /></div>}>
         {page}
         {(musicMounted || activeTool === 'music') && <div className="persistent-page" hidden={activeTool !== 'music'}><MusicPage onNowPlayingChange={setNowPlaying} /></div>}

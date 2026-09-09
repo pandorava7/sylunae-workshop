@@ -57,7 +57,6 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlayin
     <button className="mobile-menu" onClick={onOpen} aria-label="打开导航"><Menu size={20} /></button>
     {mobileOpen && <button className="sidebar-backdrop" onClick={onClose} aria-label="关闭导航" />}
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="drag-region" />
       <div className="brand">
         <BrandMark />
         {!collapsed && <div><strong>丝月工坊</strong><span>MY QUIET SPACE</span></div>}
