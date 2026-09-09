@@ -7,7 +7,10 @@ import { TaskItem } from '@tiptap/extension-task-item'
 import { TaskList } from '@tiptap/extension-task-list'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
-import { describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { createElement } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { NoteTagsInput } from '../components/NoteTagsInput'
 import { looksLikeMarkdown, MarkdownPaste } from '../editor/markdownPaste'
 import { applyNotePatch } from '../editor/notePatch'
 import type { Note } from '../shared/types'
@@ -19,6 +22,34 @@ function pasteEvent(text: string) {
   })
   return event
 }
+
+describe('note tag input', () => {
+  it('keeps an unfinished separator visible while saving parsed tags', () => {
+    const onChange = vi.fn()
+    render(createElement(NoteTagsInput, { tags: ['动画'], disabled: false, onChange }))
+    const input = screen.getByPlaceholderText('添加标签，用逗号分隔')
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '动画,' } })
+
+    expect((input as HTMLInputElement).value).toBe('动画,')
+    expect(onChange).toHaveBeenLastCalledWith(['动画'])
+    cleanup()
+  })
+
+  it('normalizes ASCII and Chinese commas only after editing finishes', () => {
+    render(createElement(NoteTagsInput, { tags: [], disabled: false, onChange: () => undefined }))
+    const input = screen.getByPlaceholderText('添加标签，用逗号分隔')
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '动画， 游戏,  音乐' } })
+    expect((input as HTMLInputElement).value).toBe('动画， 游戏,  音乐')
+
+    fireEvent.blur(input)
+    expect((input as HTMLInputElement).value).toBe('动画, 游戏, 音乐')
+    cleanup()
+  })
+})
 
 describe('note editor markdown paste', () => {
   it('inserts markdown as structured rich text', () => {

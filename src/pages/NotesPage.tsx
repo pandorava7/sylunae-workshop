@@ -13,6 +13,7 @@ import type { Note } from '../shared/types'
 import { extractText, formatDate, newId, nowIso } from '../utils'
 import { EmptyState } from '../components/Icons'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { NoteTagsInput } from '../components/NoteTagsInput'
 import { PromptDialog } from '../components/PromptDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -126,7 +127,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       {inTrash ? <><button className="icon-button" onClick={onRestore} title="恢复"><ArchiveRestore size={17} /></button><button className="icon-button danger" onClick={onDestroy} title="永久删除"><Trash2 size={17} /></button></> : <button className="icon-button" onClick={onTrash} title="移至回收站"><Trash2 size={17} /></button>}
     </div></div>
     <Input className="note-title-input" value={note.title} disabled={inTrash} onChange={(event) => onSave({ title: event.target.value })} placeholder="无标题笔记" />
-    <Input className="tag-input" value={note.tags.join(', ')} disabled={inTrash} onChange={(event) => onSave({ tags: event.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} placeholder="添加标签，用逗号分隔" />
+    <NoteTagsInput tags={note.tags} disabled={inTrash} onChange={(tags) => onSave({ tags })} />
     {!inTrash && <div className="editor-toolbar">
       {action(editor.isActive('bold'), '粗体', <Bold size={16} />, () => { editor.chain().focus().toggleBold().run() })}
       {action(editor.isActive('italic'), '斜体', <Italic size={16} />, () => { editor.chain().focus().toggleItalic().run() })}
