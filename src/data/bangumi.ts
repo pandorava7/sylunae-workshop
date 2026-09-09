@@ -22,6 +22,7 @@ const collectionSchema = z.object({
     score: z.number().optional().default(0),
     rank: z.number().nullable().optional(),
     images: z.object({ common: z.string().optional(), medium: z.string().optional(), large: z.string().optional() }).nullable().optional(),
+    tags: z.array(z.object({ name: z.string(), count: z.number().optional() }).passthrough()).optional().default([]),
   }).passthrough(),
 }).passthrough()
 
@@ -42,7 +43,7 @@ export async function fetchBangumiCollection(username: string, signal?: AbortSig
     let response: Response
     try {
       response = await fetch(`https://api.bgm.tv/v0/users/${encodeURIComponent(cleanUsername)}/collections?limit=${limit}&offset=${offset}`, {
-        headers: { Accept: 'application/json' }, signal,
+        headers: { Accept: 'application/json' }, signal, cache: 'no-store',
       })
     } catch (error) {
       if ((error as Error).name === 'AbortError') throw error
@@ -66,7 +67,7 @@ export async function fetchBangumiCollection(username: string, signal?: AbortSig
       rank: entry.subject.rank ?? null,
       rate: entry.rate,
       comment: entry.comment,
-      tags: entry.tags,
+      tags: entry.tags.length > 0 ? entry.tags : entry.subject.tags.map((tag) => tag.name),
       epStatus: entry.ep_status,
       volStatus: entry.vol_status,
       totalEpisodes: entry.subject.eps,

@@ -58,5 +58,5 @@ export function parseBackup(contents: string): BackupEnvelope {
 
 export function backupSummary(backup: BackupEnvelope): string {
   const { snapshot } = backup
-  return `笔记 ${snapshot.notes.length} 条、目标 ${snapshot.goals.length} 个、音乐索引 ${snapshot.tracks.length} 首、Bangumi 收藏 ${snapshot.bangumi?.items.length ?? 0} 条`
+  return `笔记 ${snapshot.notes.length} 条、目标 ${snapshot.goals.length} 个、音乐索引 ${snapshot.tracks.length} 首`
 }

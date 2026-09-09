@@ -63,7 +63,7 @@ function SettingsPanel() {
     const clean = username.trim()
     if (clean === snapshot.settings.bangumiUsername) return
     update((state) => ({ ...state, bangumi: null, settings: { ...state.settings, bangumiUsername: clean, updatedAt: nowIso() } }))
-    setMessage(clean ? '用户名已更新，返回收藏库后会自动同步。' : '已移除 Bangumi 用户名。')
+    setMessage(clean ? '用户名已更新，返回收藏库后会实时读取。' : '已移除 Bangumi 用户名。')
   }
   const exportBackup = async () => {
     await flush()
@@ -114,7 +114,7 @@ function SettingsPanel() {
       <div className="settings-section-body">
         {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} onThemeChange={setTheme} onPalettesChange={setThemePalettes} />}
         {activeSection === 'connections' && <ConnectionSettings username={username} onUsernameChange={setUsername} onSave={saveUsername} />}
-        {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length, bangumi: snapshot.bangumi?.items.length || 0 }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} />}
+        {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} />}
         {activeSection === 'about' && <AboutSettings />}
       </div>
     </main>
@@ -203,11 +203,11 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
 }
 
 function ConnectionSettings({ username, onUsernameChange, onSave }: { username: string; onUsernameChange: (value: string) => void; onSave: () => void }) {
-  return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。更换用户名会清除当前收藏缓存，并在进入收藏库时重新读取。</small></label><Button variant="link" className="text-link" onClick={() => window.siyue?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
+  return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。每次进入收藏库都会实时读取最新公开数据，不会缓存收藏内容。</small></label><Button variant="link" className="text-link" onClick={() => window.siyue?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
 }
 
-function DataSettings({ counts, onExport, onImport, inputRef, onFile }: { counts: { notes: number; goals: number; tracks: number; bangumi: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
-  return <section className="settings-pane"><SettingHeading icon={<Database />} title="本地数据" description="为重要内容留一份可以带走的副本。" /><div className="data-summary"><div><NotebookCount value={counts.notes} label="笔记" /></div><div><NotebookCount value={counts.goals} label="目标" /></div><div><NotebookCount value={counts.tracks} label="音乐索引" /></div><div><NotebookCount value={counts.bangumi} label="收藏缓存" /></div></div><div className="settings-actions"><Button variant="outline" className="button secondary" onClick={onExport}><Download size={16} />导出备份</Button><Button variant="outline" className="button secondary" onClick={onImport}><Upload size={16} />导入备份</Button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.currentTarget.value = '' }} /></div><small className="settings-note">备份包含笔记、目标、设置、Bangumi 缓存和音乐索引，不包含音乐原文件。</small></section>
+function DataSettings({ counts, onExport, onImport, inputRef, onFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
+  return <section className="settings-pane"><SettingHeading icon={<Database />} title="本地数据" description="为重要内容留一份可以带走的副本。" /><div className="data-summary"><div><NotebookCount value={counts.notes} label="笔记" /></div><div><NotebookCount value={counts.goals} label="目标" /></div><div><NotebookCount value={counts.tracks} label="音乐索引" /></div></div><div className="settings-actions"><Button variant="outline" className="button secondary" onClick={onExport}><Download size={16} />导出备份</Button><Button variant="outline" className="button secondary" onClick={onImport}><Upload size={16} />导入备份</Button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.currentTarget.value = '' }} /></div><small className="settings-note">备份包含笔记、目标、设置和音乐索引，不包含音乐原文件与实时 Bangumi 数据。</small></section>
 }
 
 function AboutSettings() {

@@ -1,91 +1,133 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpDown, ExternalLink, Grid2X2, LayoutList, RefreshCw, Search, SlidersHorizontal, Sparkles, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import type { MouseEvent } from 'react'
+import { ExternalLink, Search, Sparkles, Star, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { COLLECTION_LABELS, fetchBangumiCollection, SUBJECT_LABELS } from '../data/bangumi'
-import type { BangumiCollectionItem, BangumiCollectionType, BangumiSubjectType } from '../shared/types'
+import type { BangumiCollectionItem, BangumiCollectionType, BangumiProfileCache, BangumiSubjectType } from '../shared/types'
 import { formatDate } from '../utils'
-import { EmptyState, Spinner } from '../components/Icons'
+import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { EmptyState, Spinner } from '../components/Icons'
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from '../components/ui/pagination'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../components/ui/sheet'
-import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 
-type ViewMode = 'grid' | 'list'
-type SortMode = 'updated' | 'score' | 'rate'
+const PAGE_SIZE = 12
+const SUBJECT_TYPES = [2, 3, 4, 6, 1] as const satisfies readonly BangumiSubjectType[]
+const COLLECTION_TYPES = [1, 2, 3, 4, 5] as const satisfies readonly BangumiCollectionType[]
 
 export function LibraryPage() {
-  const { snapshot, update } = useAppStore()
-  const [query, setQuery] = useState('')
-  const [subjectType, setSubjectType] = useState<number>(0)
-  const [collectionType, setCollectionType] = useState<number>(0)
-  const [sort, setSort] = useState<SortMode>('updated')
-  const [view, setView] = useState<ViewMode>('grid')
+  const { snapshot } = useAppStore()
+  const [subjectType, setSubjectType] = useState<BangumiSubjectType>(2)
+  const [collectionType, setCollectionType] = useState<BangumiCollectionType | 0>(0)
+  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<BangumiCollectionItem | null>(null)
+  const [collection, setCollection] = useState<BangumiProfileCache | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState('')
-  const didAutoSync = useRef('')
   const username = snapshot?.settings.bangumiUsername.trim() || ''
-  const cache = snapshot?.bangumi
-
-  const sync = async () => {
-    if (!username || syncing) return
-    setSyncing(true)
-    setSyncError('')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 20000)
-    try {
-      const result = await fetchBangumiCollection(username, controller.signal)
-      update((state) => ({ ...state, bangumi: result }))
-    } catch (error) {
-      setSyncError((error as Error).name === 'AbortError' ? '同步超时，请稍后重试' : (error as Error).message)
-    } finally {
-      clearTimeout(timeout)
-      setSyncing(false)
-    }
-  }
+  const cache = collection
 
   useEffect(() => {
-    if (username && (!cache || cache.username !== username) && didAutoSync.current !== username) {
-      didAutoSync.current = username
-      void sync()
+    setCollection(null)
+    setSelected(null)
+    setSyncError('')
+    if (!username) {
+      setSyncing(false)
+      return
     }
-  }, [username, cache?.username])
 
-  const items = useMemo(() => {
-    const clean = query.trim().toLocaleLowerCase()
-    const result = (cache?.items || []).filter((item) => {
-      const matchesQuery = !clean || `${item.name} ${item.nameCn} ${item.tags.join(' ')} ${item.platform}`.toLocaleLowerCase().includes(clean)
-      return matchesQuery && (!subjectType || item.subjectType === subjectType) && (!collectionType || item.collectionType === collectionType)
-    })
-    return result.sort((a, b) => {
-      if (sort === 'score') return b.score - a.score
-      if (sort === 'rate') return b.rate - a.rate
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    })
-  }, [cache?.items, query, subjectType, collectionType, sort])
+    let active = true
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 20000)
+    setSyncing(true)
+
+    void fetchBangumiCollection(username, controller.signal)
+      .then((result) => { if (active) setCollection(result) })
+      .catch((error: Error) => {
+        if (active) setSyncError(error.name === 'AbortError' ? '加载超时，请重新进入收藏库' : error.message)
+      })
+      .finally(() => {
+        clearTimeout(timeout)
+        if (active) setSyncing(false)
+      })
+
+    return () => {
+      active = false
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [username])
+
+  const subjectCounts = useMemo(() => {
+    const counts = new Map<BangumiSubjectType, number>()
+    for (const item of cache?.items || []) counts.set(item.subjectType, (counts.get(item.subjectType) || 0) + 1)
+    return counts
+  }, [cache?.items])
+
+  const visibleSubjectTypes = useMemo(() => {
+    const populated = SUBJECT_TYPES.filter((type) => subjectCounts.has(type))
+    return populated.length > 0 ? populated : SUBJECT_TYPES.slice(0, 4)
+  }, [subjectCounts])
+
+  useEffect(() => {
+    if (cache?.items.length && !subjectCounts.has(subjectType)) setSubjectType(visibleSubjectTypes[0])
+  }, [cache?.items.length, subjectCounts, subjectType, visibleSubjectTypes])
+
+  const statusCounts = useMemo(() => {
+    const counts = new Map<BangumiCollectionType, number>()
+    for (const item of cache?.items || []) {
+      if (item.subjectType === subjectType) counts.set(item.collectionType, (counts.get(item.collectionType) || 0) + 1)
+    }
+    return counts
+  }, [cache?.items, subjectType])
+
+  const items = useMemo(() => (cache?.items || []).filter((item) => (
+    item.subjectType === subjectType && (!collectionType || item.collectionType === collectionType)
+  )), [cache?.items, subjectType, collectionType])
+
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
+  const pagedItems = useMemo(() => items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [items, page])
+
+  useEffect(() => setPage(1), [subjectType, collectionType])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const openExternal = (url: string) => window.siyue?.system.openExternal(url) ?? window.open(url, '_blank', 'noopener,noreferrer')
 
-  return <section className="page library-page">
-    <header className="page-header">
-      <div><span className="eyebrow">COLLECTION</span><h1>收藏库</h1><p>{cache ? `${cache.items.length} 个条目 · ${cache.username}` : '连接你的 Bangumi 公开收藏'}</p></div>
-      {username && <Button variant="outline" className="button secondary" onClick={() => void sync()} disabled={syncing}><RefreshCw size={16} className={syncing ? 'spin' : ''} />{syncing ? '同步中' : '刷新'}</Button>}
-    </header>
+  if (!username) {
+    return <section className="page library-page">
+      <header className="page-header"><div><span className="eyebrow">COLLECTION</span><h1>收藏库</h1><p>连接你的 Bangumi 公开收藏</p></div></header>
+      <EmptyState icon={<Sparkles size={26} />} title="从 Bangumi 开始" description="前往设置填写一个公开的 Bangumi 用户名，五类收藏会安静地汇聚在这里。" />
+    </section>
+  }
 
-    {!username ? <EmptyState icon={<Sparkles size={26} />} title="从 Bangumi 开始" description="前往设置填写一个公开的 Bangumi 用户名，五类收藏会安静地汇聚在这里。" /> : <>
-      <div className="toolbar library-toolbar">
-        <label className="search-box"><Search size={17} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、标签或平台" /></label>
-        <Select value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value))}><SelectTrigger className="select-control"><SlidersHorizontal size={16} /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">全部类型</SelectItem>{Object.entries(SUBJECT_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
-        <Select value={String(collectionType)} onValueChange={(value) => setCollectionType(Number(value))}><SelectTrigger className="select-control"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">全部状态</SelectItem>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
-        <Select value={sort} onValueChange={(value) => setSort(value as SortMode)}><SelectTrigger className="select-control"><ArrowUpDown size={15} /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="updated">最近更新</SelectItem><SelectItem value="score">站点评分</SelectItem><SelectItem value="rate">我的评分</SelectItem></SelectContent></Select>
-        <ToggleGroup type="single" value={view} onValueChange={(value) => { if (value) setView(value as ViewMode) }} className="segmented icon-segmented" spacing={0}><ToggleGroupItem value="grid" aria-label="卡片视图"><Grid2X2 size={16} /></ToggleGroupItem><ToggleGroupItem value="list" aria-label="列表视图"><LayoutList size={17} /></ToggleGroupItem></ToggleGroup>
-      </div>
-      {syncError && <div className="notice error"><span>{syncError}。已保留上次同步的数据。</span><button onClick={() => setSyncError('')}><X size={15} /></button></div>}
-      {syncing && !cache ? <div className="center-loading"><Spinner /><span>正在读取公开收藏…</span></div> : items.length === 0 ? <EmptyState icon={<Search size={24} />} title={cache ? '没有匹配的条目' : '收藏尚未同步'} description={cache ? '换一个关键词或筛选条件试试。' : '点击刷新，从 Bangumi 拉取你的公开收藏。'} action={!cache ? <Button className="button primary" onClick={() => void sync()}>开始同步</Button> : undefined} /> :
-        <div className={`collection-${view}`}>{items.map((item) => <CollectionCard key={item.subjectId} item={item} view={view} onClick={() => setSelected(item)} />)}</div>}
-      {cache && <div className="sync-caption">上次同步：{formatDate(cache.syncedAt, true)} · 仅包含公开收藏</div>}
-    </>}
+  return <section className="page library-page">
+    <Tabs className="library-tabs" value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value) as BangumiSubjectType)}>
+      <TabsList variant="line" aria-label="收藏类型">
+        {visibleSubjectTypes.map((type) => <TabsTrigger key={type} value={String(type)}>
+          <span>{SUBJECT_LABELS[type]}</span><span className="library-tab-count">{subjectCounts.get(type) || 0}</span>
+        </TabsTrigger>)}
+      </TabsList>
+    </Tabs>
+
+    <div className="library-statuses" role="radiogroup" aria-label="收藏状态">
+      {subjectCounts.get(subjectType) ? <Badge asChild variant={collectionType === 0 ? 'outline' : 'secondary'} className={collectionType === 0 ? 'active' : ''}>
+        <button type="button" role="radio" aria-checked={collectionType === 0} onClick={() => setCollectionType(0)}>全部 <span>({subjectCounts.get(subjectType)})</span></button>
+      </Badge> : null}
+      {COLLECTION_TYPES.map((type) => statusCounts.get(type) ? <Badge key={type} asChild variant={collectionType === type ? 'outline' : 'secondary'} className={collectionType === type ? 'active' : ''}>
+        <button type="button" role="radio" aria-checked={collectionType === type} onClick={() => setCollectionType(type)}>{COLLECTION_LABELS[type]} <span>({statusCounts.get(type)})</span></button>
+      </Badge> : null)}
+    </div>
+
+    {syncError && <div className="notice error"><span>{syncError}</span><button onClick={() => setSyncError('')} aria-label="关闭提示"><X size={15} /></button></div>}
+    {syncing ? <div className="center-loading"><Spinner /><span>正在读取你的公开收藏…</span></div> : items.length === 0 ?
+      <EmptyState icon={<Search size={24} />} title={cache ? '这个分类还没有条目' : '未能读取收藏'} description={cache ? '切换一个类型或收藏状态试试。' : '重新进入收藏库时会再次实时加载。'} /> : <>
+        <div className="collection-grid">{pagedItems.map((item) => <CollectionCard key={item.subjectId} item={item} onClick={() => setSelected(item)} />)}</div>
+        <LibraryPagination page={page} pageCount={pageCount} onPageChange={setPage} />
+      </>}
+    {cache && <div className="sync-caption">本次加载：{formatDate(cache.syncedAt, true)} · 仅包含公开收藏</div>}
 
     {selected && <Sheet open onOpenChange={(open) => { if (!open) setSelected(null) }}><SheetContent className="detail-drawer" showCloseButton>
       <div className="drawer-cover">{selected.cover ? <img src={selected.cover} alt="" /> : <div className="cover-placeholder"><Sparkles /></div>}</div>
@@ -102,9 +144,51 @@ export function LibraryPage() {
   </section>
 }
 
-function CollectionCard({ item, view, onClick }: { item: BangumiCollectionItem; view: ViewMode; onClick: () => void }) {
-  return <button className="collection-card" onClick={onClick}>
-    <div className="collection-cover">{item.cover ? <img src={item.cover} alt="" loading="lazy" /> : <div className="cover-placeholder"><Sparkles /></div>}<span className="type-chip">{SUBJECT_LABELS[item.subjectType]}</span></div>
-    <div className="collection-info"><h3>{item.nameCn || item.name}</h3>{view === 'list' && <p>{item.summary || item.name}</p>}<div className="collection-meta"><span>{COLLECTION_LABELS[item.collectionType]}</span><span>{item.score ? `★ ${item.score}` : '暂无评分'}</span></div></div>
+function CollectionCard({ item, onClick }: { item: BangumiCollectionItem; onClick: () => void }) {
+  const shownTags = item.tags.slice(0, 3)
+  const hiddenTagCount = item.tags.length - shownTags.length
+  const year = item.airDate.match(/^\d{4}/)?.[0]
+
+  return <button className="collection-card" onClick={onClick} aria-label={`查看 ${item.nameCn || item.name}`}>
+    <div className="collection-cover">
+      {item.cover ? <img src={item.cover} alt="" loading="lazy" decoding="async" /> : <div className="cover-placeholder"><Sparkles /></div>}
+      <span className={`collection-state state-${item.collectionType}`}>{COLLECTION_LABELS[item.collectionType]}</span>
+      <span className="collection-score"><Star size={13} fill="currentColor" />{formatScore(item.score)}</span>
+      <div className="collection-title"><h3>{item.nameCn || item.name}</h3>{year && <span>{year}</span>}</div>
+    </div>
+    <div className="collection-tags">
+      {shownTags.map((tag) => <span key={tag}>{tag}</span>)}
+      {hiddenTagCount > 0 && <span>+{hiddenTagCount}</span>}
+      {item.tags.length === 0 && item.platform && <span>{item.platform}</span>}
+    </div>
   </button>
+}
+
+function LibraryPagination({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {
+  if (pageCount <= 1) return null
+  const pages = paginationItems(page, pageCount)
+  const selectPage = (event: MouseEvent, nextPage: number) => {
+    event.preventDefault()
+    onPageChange(nextPage)
+  }
+
+  return <Pagination className="library-pagination">
+    <PaginationContent>
+      <PaginationItem><PaginationPrevious href="#" text="上一页" aria-disabled={page === 1} className={page === 1 ? 'disabled' : ''} onClick={(event) => { if (page > 1) selectPage(event, page - 1); else event.preventDefault() }} /></PaginationItem>
+      {pages.map((item) => typeof item === 'number' ? <PaginationItem key={item}><PaginationLink href="#" isActive={item === page} onClick={(event) => selectPage(event, item)}>{item}</PaginationLink></PaginationItem> : <PaginationItem key={item}><PaginationEllipsis /></PaginationItem>)}
+      <PaginationItem><PaginationNext href="#" text="下一页" aria-disabled={page === pageCount} className={page === pageCount ? 'disabled' : ''} onClick={(event) => { if (page < pageCount) selectPage(event, page + 1); else event.preventDefault() }} /></PaginationItem>
+    </PaginationContent>
+  </Pagination>
+}
+
+function paginationItems(current: number, total: number): Array<number | string> {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, 'end', total]
+  if (current >= total - 3) return [1, 'start', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, 'start', current - 1, current, current + 1, 'end', total]
+}
+
+function formatScore(score: number): string {
+  if (!score) return '—'
+  return Number.isInteger(score) ? String(score) : score.toFixed(1)
 }

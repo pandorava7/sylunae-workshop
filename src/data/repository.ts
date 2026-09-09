@@ -27,7 +27,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     folders: snapshot.folders ?? [],
     notes: snapshot.notes ?? [],
     goals: snapshot.goals ?? [],
-    bangumi: snapshot.bangumi ?? null,
+    bangumi: null,
   }
 }
 

@@ -15,7 +15,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PromptDialog } from '../components/PromptDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
-import { NativeSelect, NativeSelectOption } from '../components/ui/native-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
 type FolderFilter = 'all' | 'trash' | string
 
@@ -110,7 +110,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
   const action = (active: boolean, title: string, icon: React.ReactNode, run: () => void) => <button className={active ? 'active' : ''} title={title} onClick={run}>{icon}</button>
 
   return <div className="note-editor-wrap">
-    <div className="note-editor-top"><NativeSelect value={note.folderId || ''} disabled={inTrash} onChange={(event) => onSave({ folderId: event.target.value || null })}><NativeSelectOption value="">无文件夹</NativeSelectOption>{folders.map((folder) => <NativeSelectOption key={folder.id} value={folder.id}>{folder.name}</NativeSelectOption>)}</NativeSelect><div>
+    <div className="note-editor-top"><Select value={note.folderId || 'none'} disabled={inTrash} onValueChange={(value) => onSave({ folderId: value === 'none' ? null : value })}><SelectTrigger className="select-control"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">无文件夹</SelectItem>{folders.map((folder) => <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>)}</SelectContent></Select><div>
       {!inTrash && <button className="icon-button" onClick={() => onSave({ pinned: !note.pinned })} title={note.pinned ? '取消置顶' : '置顶'}>{note.pinned ? <PinOff size={17} /> : <Pin size={17} />}</button>}
       {inTrash ? <><button className="icon-button" onClick={onRestore} title="恢复"><ArchiveRestore size={17} /></button><button className="icon-button danger" onClick={onDestroy} title="永久删除"><Trash2 size={17} /></button></> : <button className="icon-button" onClick={onTrash} title="移至回收站"><Trash2 size={17} /></button>}
     </div></div>
