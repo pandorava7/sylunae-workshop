@@ -56,7 +56,18 @@ export function loadSnapshot(): AppSnapshot {
   try {
     const parsed = JSON.parse(row.payload) as AppSnapshot
     const defaults = createDefaultSnapshot()
-    return { ...defaults, ...parsed, settings: { ...defaults.settings, ...parsed.settings, themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) } }
+    const legacyTool = parsed.settings?.lastTool as string | undefined
+    const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
+    const lastTool = ['tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
+    return {
+      ...defaults,
+      ...parsed,
+      settings: { ...defaults.settings, ...parsed.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) },
+      todos: parsed.todos ?? [],
+      pomodoro: { ...defaults.pomodoro, ...parsed.pomodoro },
+      clipboardSnippets: parsed.clipboardSnippets ?? [],
+      launcherLinks: parsed.launcherLinks ?? [],
+    }
   } catch {
     const fallback = createDefaultSnapshot()
     saveSnapshot(fallback)

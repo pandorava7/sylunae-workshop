@@ -46,16 +46,23 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const defaults = createDefaultSnapshot()
   if (!snapshot) return defaults
   const music = reconcileMusicLibrary(snapshot.tracks ?? [], snapshot.albums ?? [])
+  const legacyTool = snapshot.settings?.lastTool as string | undefined
+  const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
+  const lastTool = ['tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
   return {
     ...defaults,
     ...snapshot,
     version: 1,
-    settings: { ...defaults.settings, ...snapshot.settings, themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
+    settings: { ...defaults.settings, ...snapshot.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
     tracks: music.tracks,
     albums: music.albums,
     folders: snapshot.folders ?? [],
     notes: snapshot.notes ?? [],
     goals: snapshot.goals ?? [],
+    todos: snapshot.todos ?? [],
+    pomodoro: { ...defaults.pomodoro, ...snapshot.pomodoro },
+    clipboardSnippets: snapshot.clipboardSnippets ?? [],
+    launcherLinks: snapshot.launcherLinks ?? [],
     bangumi: null,
   }
 }

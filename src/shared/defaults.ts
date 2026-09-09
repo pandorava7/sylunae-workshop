@@ -8,7 +8,7 @@ export function createDefaultSnapshot(): AppSnapshot {
     settings: {
       theme: 'system',
       themePalettes: normalizeThemePalettes(),
-      lastTool: 'library',
+      lastTool: 'tasks',
       sidebarCollapsed: false,
       bangumiUsername: '',
       updatedAt: now,
@@ -19,5 +19,19 @@ export function createDefaultSnapshot(): AppSnapshot {
     folders: [],
     notes: [],
     goals: [],
+    todos: [],
+    pomodoro: {
+      mode: 'focus',
+      focusMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      sessionsBeforeLongBreak: 4,
+      completedSessions: 0,
+      secondsRemaining: 25 * 60,
+      running: false,
+      endsAt: null,
+    },
+    clipboardSnippets: [],
+    launcherLinks: [],
   }
 }

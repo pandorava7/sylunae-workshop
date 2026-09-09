@@ -16,7 +16,7 @@ import { Textarea } from '../components/ui/textarea'
 
 type SortMode = 'due' | 'progress' | 'updated'
 
-export function GoalsPage() {
+export function GoalsPage({ embedded = false }: { embedded?: boolean }) {
   const { snapshot, update } = useAppStore()
   const goals = snapshot?.goals || []
   const [status, setStatus] = useState<GoalStatus>('active')
@@ -42,8 +42,8 @@ export function GoalsPage() {
     update((state) => ({ ...state, goals: state.goals.filter((item) => item.id !== goal.id) })); setSelectedId(null)
   }
 
-  return <section className="page goals-page">
-    <header className="page-header"><div><span className="eyebrow">GOALS</span><h1>目标</h1><p>把远方拆成今天可以完成的一小步</p></div><Button className="button primary" onClick={() => setCreating(true)}><Plus size={17} />新建目标</Button></header>
+  return <section className={`${embedded ? 'task-panel' : 'page'} goals-page`}>
+    {embedded ? <div className="panel-heading"><div><h2>目标追踪</h2><p>把远方拆成今天可以完成的一小步</p></div><Button className="button primary" onClick={() => setCreating(true)}><Plus size={17} />新建目标</Button></div> : <header className="page-header"><div><span className="eyebrow">GOALS</span><h1>目标</h1><p>把远方拆成今天可以完成的一小步</p></div><Button className="button primary" onClick={() => setCreating(true)}><Plus size={17} />新建目标</Button></header>}
     <div className="goal-overview">
       <div><span className="overview-icon"><CircleDot size={19} /></span><p>进行中</p><strong>{goals.filter((goal) => goal.status === 'active').length}</strong></div>
       <div><span className="overview-icon"><CheckCircle2 size={19} /></span><p>已完成</p><strong>{goals.filter((goal) => goal.status === 'completed').length}</strong></div>

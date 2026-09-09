@@ -1,7 +1,7 @@
 import type { JSONContent } from '@tiptap/react'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
-export type ToolId = 'library' | 'music' | 'notes' | 'goals' | 'settings'
+export type ToolId = 'tasks' | 'notes' | 'music' | 'collection' | 'tools' | 'settings'
 
 export interface ThemePalette {
   bg: string
@@ -177,6 +177,50 @@ export interface Goal {
   updatedAt: string
 }
 
+export type TodoPriority = 'low' | 'medium' | 'high'
+
+export interface QuickTodo {
+  id: string
+  title: string
+  priority: TodoPriority
+  dueDate: string
+  completed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type PomodoroMode = 'focus' | 'shortBreak' | 'longBreak'
+
+export interface PomodoroState {
+  mode: PomodoroMode
+  focusMinutes: number
+  shortBreakMinutes: number
+  longBreakMinutes: number
+  sessionsBeforeLongBreak: number
+  completedSessions: number
+  secondsRemaining: number
+  running: boolean
+  endsAt: string | null
+}
+
+export interface ClipboardSnippet {
+  id: string
+  title: string
+  content: string
+  category: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LauncherLink {
+  id: string
+  title: string
+  url: string
+  description: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AppSnapshot {
   version: 1
   settings: AppSettings
@@ -186,6 +230,10 @@ export interface AppSnapshot {
   folders: NoteFolder[]
   notes: Note[]
   goals: Goal[]
+  todos: QuickTodo[]
+  pomodoro: PomodoroState
+  clipboardSnippets: ClipboardSnippet[]
+  launcherLinks: LauncherLink[]
 }
 
 export interface BackupSummary {

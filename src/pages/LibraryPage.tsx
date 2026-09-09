@@ -18,7 +18,7 @@ const PAGE_SIZE = 12
 const SUBJECT_TYPES = [2, 3, 4, 6, 1] as const satisfies readonly BangumiSubjectType[]
 const COLLECTION_TYPES = [1, 2, 3, 4, 5] as const satisfies readonly BangumiCollectionType[]
 
-export function LibraryPage() {
+export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
   const { snapshot } = useAppStore()
   const [subjectType, setSubjectType] = useState<BangumiSubjectType>(2)
   const [collectionType, setCollectionType] = useState<BangumiCollectionType | 0>(0)
@@ -97,13 +97,13 @@ export function LibraryPage() {
   const openExternal = (url: string) => window.sylunae?.system.openExternal(url) ?? window.open(url, '_blank', 'noopener,noreferrer')
 
   if (!username) {
-    return <section className="page library-page">
+    return <section className={`${embedded ? 'collection-content' : 'page'} library-page`}>
       <header className="page-header"><div><span className="eyebrow">COLLECTION</span><h1>收藏库</h1><p>连接你的 Bangumi 公开收藏</p></div></header>
       <EmptyState icon={<Sparkles size={26} />} title="从 Bangumi 开始" description="前往设置填写一个公开的 Bangumi 用户名，五类收藏会安静地汇聚在这里。" />
     </section>
   }
 
-  return <section className="page library-page">
+  return <section className={`${embedded ? 'collection-content' : 'page'} library-page`}>
     <Tabs className="library-tabs" value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value) as BangumiSubjectType)}>
       <TabsList variant="line" aria-label="收藏类型">
         {visibleSubjectTypes.map((type) => <TabsTrigger key={type} value={String(type)}>

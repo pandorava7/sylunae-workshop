@@ -6,10 +6,11 @@ import type { MusicTrack, ToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
-const LibraryPage = lazy(() => import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
 const MusicPage = lazy(() => import('./pages/MusicPage').then((module) => ({ default: module.MusicPage })))
 const NotesPage = lazy(() => import('./pages/NotesPage').then((module) => ({ default: module.NotesPage })))
-const GoalsPage = lazy(() => import('./pages/GoalsPage').then((module) => ({ default: module.GoalsPage })))
+const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })))
+const CollectionPage = lazy(() => import('./pages/CollectionPage').then((module) => ({ default: module.CollectionPage })))
+const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })))
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
 
 export default function App() {
@@ -45,7 +46,7 @@ export default function App() {
     if (snapshot?.settings.lastTool !== 'settings') return
     setSettingsMounted(true)
     setSettingsOpen(true)
-    update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'library', updatedAt: new Date().toISOString() } }))
+    update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'tasks', updatedAt: new Date().toISOString() } }))
   }, [snapshot?.settings.lastTool, update])
 
   useEffect(() => {
@@ -59,12 +60,13 @@ export default function App() {
   const selectTool = (tool: ToolId) => update((state) => ({ ...state, settings: { ...state.settings, lastTool: tool, updatedAt: new Date().toISOString() } }))
   const toggleSidebar = () => update((state) => ({ ...state, settings: { ...state.settings, sidebarCollapsed: !state.settings.sidebarCollapsed, updatedAt: new Date().toISOString() } }))
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
-  const activeTool = snapshot.settings.lastTool === 'settings' ? 'library' : snapshot.settings.lastTool
+  const activeTool = snapshot.settings.lastTool === 'settings' ? 'tasks' : snapshot.settings.lastTool
   const page = {
-    library: <LibraryPage />,
+    tasks: <TasksPage />,
+    collection: <CollectionPage />,
+    tools: <ToolsPage />,
     music: null,
     notes: <NotesPage />,
-    goals: <GoalsPage />,
   }[activeTool]
 
   return <TooltipProvider><div className="app-shell">

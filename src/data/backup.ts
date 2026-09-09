@@ -10,7 +10,7 @@ const settingsSchema = z.object({
     light: z.record(z.string(), z.string()),
     dark: z.record(z.string(), z.string()),
   }).optional(),
-  lastTool: z.enum(['library', 'music', 'notes', 'goals', 'settings']),
+  lastTool: z.enum(['library', 'goals', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
   sidebarCollapsed: z.boolean(),
   bangumiUsername: z.string(),
   updatedAt: timestamp,
@@ -26,6 +26,10 @@ const folderSchema = z.object({ id: z.string(), name: z.string(), createdAt: tim
 const noteSchema = z.object({ id: z.string(), title: z.string(), content: jsonContentSchema, folderId: z.string().nullable(), tags: z.array(z.string()), pinned: z.boolean(), deletedAt: timestamp.nullable(), createdAt: timestamp, updatedAt: timestamp })
 const milestoneSchema = z.object({ id: z.string(), title: z.string(), dueDate: z.string(), completed: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
 const goalSchema = z.object({ id: z.string(), title: z.string(), description: z.string(), status: z.enum(['active', 'completed', 'archived']), startDate: z.string(), dueDate: z.string(), milestones: z.array(milestoneSchema), createdAt: timestamp, updatedAt: timestamp })
+const todoSchema = z.object({ id: z.string(), title: z.string(), priority: z.enum(['low', 'medium', 'high']), dueDate: z.string(), completed: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
+const pomodoroSchema = z.object({ mode: z.enum(['focus', 'shortBreak', 'longBreak']), focusMinutes: z.number(), shortBreakMinutes: z.number(), longBreakMinutes: z.number(), sessionsBeforeLongBreak: z.number(), completedSessions: z.number(), secondsRemaining: z.number(), running: z.boolean(), endsAt: z.string().nullable() })
+const clipboardSchema = z.object({ id: z.string(), title: z.string(), content: z.string(), category: z.string(), createdAt: timestamp, updatedAt: timestamp })
+const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), createdAt: timestamp, updatedAt: timestamp })
 
 const envelopeSchema = z.object({
   format: z.literal('siyue-workshop-backup'),
@@ -40,6 +44,10 @@ const envelopeSchema = z.object({
     folders: z.array(folderSchema),
     notes: z.array(noteSchema),
     goals: z.array(goalSchema),
+    todos: z.array(todoSchema).optional().default([]),
+    pomodoro: pomodoroSchema.optional().default({ mode: 'focus', focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, sessionsBeforeLongBreak: 4, completedSessions: 0, secondsRemaining: 1500, running: false, endsAt: null }),
+    clipboardSnippets: z.array(clipboardSchema).optional().default([]),
+    launcherLinks: z.array(launcherSchema).optional().default([]),
   }),
 })
 
