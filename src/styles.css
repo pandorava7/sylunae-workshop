@@ -384,8 +384,16 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
 .album-cover-copy .button { min-height: 34px; padding-inline: 10px; font-size: 12px; }
 .album-track-list { margin-top: 8px; }
 .album-track-list h3 { margin: 0 0 9px; font-size: 13px; }
-.album-track-item { min-height: 48px; display: grid; grid-template-columns: 20px 32px minmax(0, 1fr) 42px; align-items: center; gap: 9px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px; }
+.album-track-item { width: 100%; min-height: 48px; padding: 0; display: grid; grid-template-columns: 20px 32px minmax(0, 1fr) 42px; align-items: center; gap: 9px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--faint); font: inherit; font-size: 11px; text-align: left; cursor: pointer; transition: background .16s ease, color .16s ease; }
+.album-track-item:hover { background: var(--surface-2); color: var(--brand); }
+.album-track-item:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.album-track-item:disabled { opacity: .55; cursor: not-allowed; }
+.album-track-item:disabled:hover { background: transparent; color: var(--faint); }
 .album-track-item:last-child { border-bottom: 0; }
+.album-track-number { display: grid; place-items: center; }
+.album-track-number > svg { display: none; }
+.album-track-item:not(:disabled):hover .album-track-number > span, .album-track-item:focus-visible .album-track-number > span { display: none; }
+.album-track-item:not(:disabled):hover .album-track-number > svg, .album-track-item:focus-visible .album-track-number > svg { display: block; }
 .album-track-item > div { width: 32px; height: 32px; overflow: hidden; display: grid; place-items: center; border-radius: 7px; background: var(--surface-2); }
 .album-track-item img { width: 100%; height: 100%; object-fit: cover; }
 .album-track-item strong { overflow: hidden; color: var(--text); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }

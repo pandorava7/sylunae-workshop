@@ -13,6 +13,7 @@ import { MusicMetadataSheet } from '../components/MusicMetadataSheet'
 import { MusicAlbumSheet } from '../components/MusicAlbumSheet'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AudioWaveform } from '../components/AudioWaveform'
+import { adjacentTrack, playbackQueue } from '../music/playback'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -29,6 +30,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   const [volume, setVolume] = useState(0.8)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<RepeatMode>('off')
+  const [queueAlbumId, setQueueAlbumId] = useState<string | null>(null)
   const [playerError, setPlayerError] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
   const [removeTarget, setRemoveTarget] = useState<MusicTrack | null>(null)
@@ -40,6 +42,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   const currentCover = current ? trackCover(current, albums, tracks) : ''
   const filtered = useMemo(() => tracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query.toLowerCase())), [tracks, query])
   const filteredAlbums = useMemo(() => albums.filter((album) => `${album.title} ${album.artist}`.toLowerCase().includes(query.toLowerCase())), [albums, query])
+  const queue = useMemo(() => playbackQueue(tracks, queueAlbumId), [tracks, queueAlbumId])
 
   useEffect(() => {
     if (!window.siyue || tracks.length === 0) return
@@ -67,8 +70,9 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
     })
   }
 
-  const playTrack = async (track: MusicTrack) => {
+  const playTrack = async (track: MusicTrack, albumId: string | null = null) => {
     if (!window.siyue || track.missing) return
+    setQueueAlbumId(albumId)
     setPlayerError('')
     try {
       const url = await window.siyue.music.getAudioUrl(track.path)
@@ -83,16 +87,8 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   }
 
   const adjacent = (direction: 1 | -1) => {
-    if (!tracks.length) return
-    let next: MusicTrack
-    if (shuffle && tracks.length > 1) {
-      const candidates = tracks.filter((track) => track.id !== currentId && !track.missing)
-      next = candidates[Math.floor(Math.random() * candidates.length)] || tracks[0]
-    } else {
-      const index = Math.max(0, tracks.findIndex((track) => track.id === currentId))
-      next = tracks[(index + direction + tracks.length) % tracks.length]
-    }
-    void playTrack(next)
+    const next = adjacentTrack(queue, currentId, direction, shuffle)
+    if (next) void playTrack(next, queueAlbumId)
   }
 
   const togglePlay = () => {
@@ -103,7 +99,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
 
   const onEnded = () => {
     if (repeat === 'one' && audio.current) { audio.current.currentTime = 0; void audio.current.play(); return }
-    if (repeat === 'off' && currentId === tracks.at(-1)?.id && !shuffle) { setPlaying(false); return }
+    if (repeat === 'off' && currentId === queue.at(-1)?.id && !shuffle) { setPlaying(false); return }
     adjacent(1)
   }
 
@@ -196,7 +192,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
       <div className="volume-control">{volume < 0.05 ? <Volume1 size={17} /> : <Volume2 size={17} />}<Slider min={0} max={1} step={0.01} value={[volume]} onValueChange={([value]) => setVolume(value)} aria-label="音量" /></div>
     </div>
     {editTarget && <MusicMetadataSheet track={editTarget} onClose={() => setEditTarget(null)} onSave={saveMetadata} />}
-    {albumTarget && <MusicAlbumSheet album={albumTarget} tracks={tracks.filter((track) => track.albumId === albumTarget.id)} onClose={() => setAlbumTarget(null)} onSave={(cover) => saveAlbumCover(albumTarget.id, cover)} />}
+    {albumTarget && <MusicAlbumSheet album={albumTarget} tracks={tracks.filter((track) => track.albumId === albumTarget.id)} onClose={() => setAlbumTarget(null)} onSave={(cover) => saveAlbumCover(albumTarget.id, cover)} onPlay={(track) => { void playTrack(track, albumTarget.id); setAlbumTarget(null) }} />}
     <ConfirmDialog open={Boolean(removeTarget)} onOpenChange={(open) => { if (!open) setRemoveTarget(null) }} title="从资料库移除？" description={removeTarget ? `将移除《${removeTarget.title}》的索引，原始音乐文件不会被删除。` : ''} confirmLabel="移除索引" destructive icon={<Trash2 />} onConfirm={() => { if (removeTarget) remove(removeTarget); setRemoveTarget(null) }} />
   </section>
 }
