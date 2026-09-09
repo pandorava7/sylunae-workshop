@@ -203,7 +203,7 @@ export interface BackupEnvelope {
   snapshot: AppSnapshot
 }
 
-export interface SiyueAPI {
+export interface SylunaeAPI {
   platform: 'electron'
   storage: {
     load: () => Promise<AppSnapshot>

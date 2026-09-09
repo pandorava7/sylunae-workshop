@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, MusicImportProgress, SiyueAPI } from '../../src/shared/types'
+import type { AppSnapshot, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
 
-const api: SiyueAPI = {
+const api: SylunaeAPI = {
   platform: 'electron',
   storage: {
     load: () => ipcRenderer.invoke('storage:load'),
@@ -34,4 +34,4 @@ const api: SiyueAPI = {
   },
 }
 
-contextBridge.exposeInMainWorld('siyue', api)
+contextBridge.exposeInMainWorld('sylunae', api)

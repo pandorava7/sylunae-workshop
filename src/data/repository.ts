@@ -6,7 +6,7 @@ import { reconcileMusicLibrary } from '../music/albums'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
 
-class SiyueDatabase extends Dexie {
+class SylunaeDatabase extends Dexie {
   state!: EntityTable<StateRow, 'id'>
   constructor() {
     super('siyue-workshop')
@@ -14,7 +14,33 @@ class SiyueDatabase extends Dexie {
   }
 }
 
-const db = new SiyueDatabase()
+class LegacySiyueDatabase extends Dexie {
+  state!: EntityTable<StateRow, 'id'>
+  constructor() {
+    super('siyue-workshop')
+    this.version(1).stores({ state: 'id' })
+  }
+}
+
+const db = new SylunaeDatabase()
+const legacyDb = new LegacySiyueDatabase()
+
+let browserMigration: Promise<void> | null = null
+
+async function migrateLegacyBrowserDatabase(): Promise<void> {
+  if (await Dexie.exists('siyue-workshop') === false) return
+
+  const currentRows = await db.state.toArray()
+  if (currentRows.length > 0) return
+
+  const legacyRows = await legacyDb.state.toArray()
+  if (legacyRows.length > 0) await db.state.bulkPut(legacyRows)
+}
+
+function ensureBrowserMigration(): Promise<void> {
+  browserMigration ??= migrateLegacyBrowserDatabase()
+  return browserMigration
+}
 
 function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const defaults = createDefaultSnapshot()
@@ -35,21 +61,28 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
 }
 
 export const repository = {
-  isDesktop: Boolean(window.siyue),
+  isDesktop: Boolean(window.sylunae),
   async load(): Promise<AppSnapshot> {
-    if (window.siyue) return normalize(await window.siyue.storage.load())
+    if (window.sylunae) return normalize(await window.sylunae.storage.load())
+    await ensureBrowserMigration()
     const row = await db.state.get(1)
     const snapshot = normalize(row?.snapshot)
     if (!row) await db.state.put({ id: 1, snapshot })
     return snapshot
   },
   async save(snapshot: AppSnapshot): Promise<void> {
-    if (window.siyue) await window.siyue.storage.save(snapshot)
-    else await db.state.put({ id: 1, snapshot })
+    if (window.sylunae) await window.sylunae.storage.save(snapshot)
+    else {
+      await ensureBrowserMigration()
+      await db.state.put({ id: 1, snapshot })
+    }
   },
   async replace(snapshot: AppSnapshot): Promise<void> {
     const safe = normalize(snapshot)
-    if (window.siyue) await window.siyue.storage.replace(safe)
-    else await db.state.put({ id: 1, snapshot: safe })
+    if (window.sylunae) await window.sylunae.storage.replace(safe)
+    else {
+      await ensureBrowserMigration()
+      await db.state.put({ id: 1, snapshot: safe })
+    }
   },
 }

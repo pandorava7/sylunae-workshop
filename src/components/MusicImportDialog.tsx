@@ -55,40 +55,40 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
   const [progress, setProgress] = useState<MusicImportProgress | null>(null)
   const activeTaskId = useRef<string | null>(null)
 
-  useEffect(() => window.siyue?.music.onImportProgress((next) => {
+  useEffect(() => window.sylunae?.music.onImportProgress((next) => {
     if (next.taskId === activeTaskId.current) setProgress(next)
   }), [])
 
   useEffect(() => {
-    if (!open || !window.siyue) return
+    if (!open || !window.sylunae) return
     setStep('choose')
     setUrl('')
     setError('')
     setProgress(null)
     activeTaskId.current = null
-    void window.siyue.music.getDownloadDirectory().then(setDirectory).catch((reason) => setError(readableError(reason)))
+    void window.sylunae.music.getDownloadDirectory().then(setDirectory).catch((reason) => setError(readableError(reason)))
   }, [open])
 
   const importFiles = async () => {
-    if (!window.siyue) return
+    if (!window.sylunae) return
     setError('')
     try {
-      const tracks = await window.siyue.music.pick()
+      const tracks = await window.sylunae.music.pick()
       if (tracks.length) { onImported(tracks); onOpenChange(false) }
     } catch (reason) { setError(readableError(reason)) }
   }
 
   const chooseDirectory = async () => {
-    if (!window.siyue) return
+    if (!window.sylunae) return
     setError('')
     try {
-      const selected = await window.siyue.music.pickDownloadDirectory(directory)
+      const selected = await window.sylunae.music.pickDownloadDirectory(directory)
       if (selected) setDirectory(selected)
     } catch (reason) { setError(readableError(reason)) }
   }
 
   const importRemote = async () => {
-    if (!window.siyue || step === 'choose') return
+    if (!window.sylunae || step === 'choose') return
     const cleanUrl = url.trim()
     if (!cleanUrl) { setError('请输入链接'); return }
     try {
@@ -102,7 +102,7 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
     setError('')
     setProgress(null)
     try {
-      const track = await window.siyue.music.importRemote({ taskId, source: step, url: cleanUrl, directory })
+    const track = await window.sylunae.music.importRemote({ taskId, source: step, url: cleanUrl, directory })
       onImported([track])
       onOpenChange(false)
     } catch (reason) {

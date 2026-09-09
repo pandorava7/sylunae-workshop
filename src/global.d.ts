@@ -1,8 +1,8 @@
-import type { SiyueAPI } from './shared/types'
+import type { SylunaeAPI } from './shared/types'
 
 declare global {
   interface Window {
-    siyue?: SiyueAPI
+    sylunae?: SylunaeAPI
   }
 }
 

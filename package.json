@@ -1,10 +1,10 @@
 {
-  "name": "siyue-workshop",
+  "name": "sylunae-workshop",
   "version": "0.1.0",
   "private": true,
   "description": "丝月工坊 - 个人桌面工具总站",
   "main": "out/main/index.js",
-  "author": "Siyue Workshop",
+  "author": "Sylunae Workshop",
   "type": "module",
   "scripts": {
     "dev:web": "vite",
@@ -63,7 +63,7 @@
     "zod": "latest"
   },
   "build": {
-    "appId": "studio.siyue.workshop",
+    "appId": "studio.sylunae.workshop",
     "productName": "丝月工坊",
     "electronVersion": "41.10.3",
     "electronDist": "node_modules/electron/dist",
@@ -82,7 +82,7 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.png",
-      "artifactName": "Siyue-Workshop-${version}-Setup.${ext}"
+      "artifactName": "Sylunae-Workshop-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

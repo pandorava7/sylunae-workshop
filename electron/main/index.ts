@@ -28,7 +28,7 @@ const MAX_REMOTE_AUDIO_BYTES = 1024 * 1024 * 1024
 type ProgressReporter = (progress: Omit<MusicImportProgress, 'taskId' | 'source'>) => void
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'siyue-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: 'sylunae-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
 function isIndexedPath(filePath: string): boolean {
@@ -121,7 +121,7 @@ function responseFileName(response: Response, url: URL, extension: string): stri
 
 async function importAudioUrl(url: URL, directory: string, report: ProgressReporter): Promise<MusicTrack> {
   report({ stage: 'reading', message: '正在连接音频地址…', percent: null })
-  const response = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Siyue-Workshop/0.1' } })
+  const response = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Sylunae-Workshop/0.1' } })
   if (!response.ok || !response.body) throw new Error(`下载失败（HTTP ${response.status}）`)
   const finalUrl = new URL(response.url)
   if (!['http:', 'https:'].includes(finalUrl.protocol) || isPrivateHost(finalUrl.hostname)) throw new Error('下载地址重定向到了不受支持的位置')
@@ -411,7 +411,7 @@ function registerIpc(): void {
     if (!isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extname(filePath).toLowerCase())) {
       throw new Error('音乐文件不可用或未加入资料库')
     }
-    return `siyue-media://audio/${Buffer.from(filePath).toString('base64url')}`
+    return `sylunae-media://audio/${Buffer.from(filePath).toString('base64url')}`
   })
   ipcMain.handle('music:read-metadata', (_event, filePath: string) => readEditableMetadata(filePath))
   ipcMain.handle('music:update-metadata', (_event, update: MusicMetadataUpdate) => updateTrackMetadata(update))
@@ -419,7 +419,7 @@ function registerIpc(): void {
   ipcMain.handle('backup:export', async (_event, contents: string) => {
     const result = await dialog.showSaveDialog({
       title: '导出丝月工坊备份',
-      defaultPath: `siyue-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      defaultPath: `sylunae-backup-${new Date().toISOString().slice(0, 10)}.json`,
       filters: [{ name: 'JSON 备份', extensions: ['json'] }],
     })
     if (result.canceled || !result.filePath) return false
@@ -443,7 +443,7 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   const rendererOrigin = process.env.ELECTRON_RENDERER_URL ? new URL(process.env.ELECTRON_RENDERER_URL).origin : 'null'
-  protocol.handle('siyue-media', async (request) => {
+  protocol.handle('sylunae-media', async (request) => {
     const requestOrigin = request.headers.get('Origin')
     if (requestOrigin && requestOrigin !== rendererOrigin) return new Response('Forbidden', { status: 403 })
     const encoded = new URL(request.url).pathname.slice(1)

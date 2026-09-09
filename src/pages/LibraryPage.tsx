@@ -94,7 +94,7 @@ export function LibraryPage() {
   useEffect(() => setPage(1), [subjectType, collectionType])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
-  const openExternal = (url: string) => window.siyue?.system.openExternal(url) ?? window.open(url, '_blank', 'noopener,noreferrer')
+  const openExternal = (url: string) => window.sylunae?.system.openExternal(url) ?? window.open(url, '_blank', 'noopener,noreferrer')
 
   if (!username) {
     return <section className="page library-page">

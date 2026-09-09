@@ -31,7 +31,7 @@ export function MusicMetadataSheet({ track, onClose, onSave }: {
 
   useEffect(() => {
     let active = true
-    window.siyue?.music.readMetadata(track.path)
+    window.sylunae?.music.readMetadata(track.path)
       .then((value) => {
         if (!active) return
         setMetadata((current) => ({

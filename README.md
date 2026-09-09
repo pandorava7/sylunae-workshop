@@ -36,8 +36,8 @@ npx shadcn@latest add <component>
 
 ## 数据说明
 
-- Electron 数据库位于系统分配的应用数据目录，数据库名为 `siyue-workshop.sqlite`。
-- 网页版数据保存在当前浏览器的 `siyue-workshop` IndexedDB 中。
+- Electron 数据库位于系统分配的应用数据目录，数据库名为 `sylunae-workshop.sqlite`。
+- 网页版数据保存在当前浏览器的 `sylunae-workshop` IndexedDB 中。
 - 音乐文件不会被复制或删除；应用只保存文件路径和元数据索引。
 - 备份包含设置、收藏缓存、笔记、目标和音乐索引，不包含音乐原文件。
 - Bangumi 集成只读取公开收藏，不需要登录，也不会写回用户账号。

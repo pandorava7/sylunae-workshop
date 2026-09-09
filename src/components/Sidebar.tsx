@@ -10,11 +10,11 @@ const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
   { id: 'goals', label: '目标', icon: ListChecks },
 ]
 
-const releasesApi = 'https://api.github.com/repos/pandorava7/sylunae-kit/releases/latest'
+const releasesApi = 'https://api.github.com/repos/pandorava7/sylunae-workshop/releases/latest'
 
 function openExternal(url: string, target = '_blank') {
-  if (window.siyue) {
-    void window.siyue.system.openExternal(url)
+  if (window.sylunae) {
+    void window.sylunae.system.openExternal(url)
     return
   }
   window.open(url, target, 'noopener,noreferrer')
@@ -30,7 +30,7 @@ function downloadDesktopApp() {
       return installer.browser_download_url
     })
     .then((url) => openExternal(url, '_self'))
-    .catch(() => openExternal('https://github.com/pandorava7/sylunae-kit/releases/latest'))
+    .catch(() => openExternal('https://github.com/pandorava7/sylunae-workshop/releases/latest'))
 }
 
 export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlaying, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
@@ -79,7 +79,7 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlayin
         {tools.map(({ id, label, icon: Icon }) => <button key={id} className={active === id ? 'active' : ''} onClick={() => select(id)} title={label}>
           <Icon size={19} strokeWidth={1.7} /><span>{label}</span>
         </button>)}
-        {!window.siyue && <button className="desktop-download-card" onClick={downloadDesktopApp} title="下载桌面端安装包">
+        {!window.sylunae && <button className="desktop-download-card" onClick={downloadDesktopApp} title="下载桌面端安装包">
           <span className="download-card-icon"><Download size={18} strokeWidth={1.8} /></span>
           <span className="download-card-copy"><strong>桌面端安装包</strong><small>下载最新 Windows 版本</small></span>
           <ChevronRight className="download-card-arrow" size={16} strokeWidth={1.8} />

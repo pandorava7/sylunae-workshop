@@ -68,14 +68,14 @@ function SettingsPanel() {
   const exportBackup = async () => {
     await flush()
     const contents = JSON.stringify(createBackup(snapshot), null, 2)
-    if (window.siyue) {
-      const saved = await window.siyue.backup.exportFile(contents)
+    if (window.sylunae) {
+      const saved = await window.sylunae.backup.exportFile(contents)
       if (saved) setMessage('备份已成功导出。')
     } else {
       const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `siyue-backup-${new Date().toISOString().slice(0, 10)}.json`
+      anchor.download = `sylunae-backup-${new Date().toISOString().slice(0, 10)}.json`
       anchor.click()
       URL.revokeObjectURL(url)
       setMessage('备份已下载。')
@@ -89,8 +89,8 @@ function SettingsPanel() {
     }
   }
   const importBackup = async () => {
-    if (window.siyue) {
-      const contents = await window.siyue.backup.importFile()
+    if (window.sylunae) {
+      const contents = await window.sylunae.backup.importFile()
       if (contents) await applyImport(contents)
     } else {
       importInput.current?.click()
@@ -203,7 +203,7 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
 }
 
 function ConnectionSettings({ username, onUsernameChange, onSave }: { username: string; onUsernameChange: (value: string) => void; onSave: () => void }) {
-  return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。每次进入收藏库都会实时读取最新公开数据，不会缓存收藏内容。</small></label><Button variant="link" className="text-link" onClick={() => window.siyue?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
+  return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。每次进入收藏库都会实时读取最新公开数据，不会缓存收藏内容。</small></label><Button variant="link" className="text-link" onClick={() => window.sylunae?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
 }
 
 function DataSettings({ counts, onExport, onImport, inputRef, onFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
@@ -211,7 +211,7 @@ function DataSettings({ counts, onExport, onImport, inputRef, onFile }: { counts
 }
 
 function AboutSettings() {
-  const desktop = Boolean(window.siyue)
+  const desktop = Boolean(window.sylunae)
   return <section className="settings-pane"><SettingHeading icon={desktop ? <HardDrive /> : <Globe2 />} title="运行环境" description={desktop ? 'Electron 桌面版' : '浏览器轻量版'} /><dl className="environment-list"><div><dt>数据位置</dt><dd>{desktop ? '本机 SQLite 数据库' : '浏览器 IndexedDB'}</dd></div><div><dt>本地音乐</dt><dd>{desktop ? '可用' : '仅桌面版可用'}</dd></div><div><dt>云端同步</dt><dd>未启用</dd></div><div><dt>应用版本</dt><dd>0.1.0</dd></div></dl></section>
 }
 

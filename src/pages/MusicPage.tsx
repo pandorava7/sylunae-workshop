@@ -47,8 +47,8 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   const queue = useMemo(() => playbackQueue(tracks, queueAlbumId), [tracks, queueAlbumId])
 
   useEffect(() => {
-    if (!window.siyue || tracks.length === 0) return
-    void window.siyue.music.checkPaths(tracks.map((track) => track.path)).then((result) => {
+    if (!window.sylunae || tracks.length === 0) return
+    void window.sylunae.music.checkPaths(tracks.map((track) => track.path)).then((result) => {
       if (tracks.some((track) => track.missing === result[track.path])) {
         update((state) => ({ ...state, tracks: state.tracks.map((track) => ({ ...track, missing: !result[track.path] })) }))
       }
@@ -75,11 +75,11 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   }
 
   const playTrack = async (track: MusicTrack, albumId: string | null = null) => {
-    if (!window.siyue || track.missing) return
+    if (!window.sylunae || track.missing) return
     setQueueAlbumId(albumId)
     setPlayerError('')
     try {
-      const url = await window.siyue.music.getAudioUrl(track.path)
+      const url = await window.sylunae.music.getAudioUrl(track.path)
       setAudioUrl(url)
       if (currentId !== track.id && audio.current) {
         audio.current.src = url
@@ -113,14 +113,14 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   }
 
   const relocate = async (track: MusicTrack) => {
-    if (!window.siyue) return
-    const replacement = await window.siyue.music.relocate(track.id)
+    if (!window.sylunae) return
+    const replacement = await window.sylunae.music.relocate(track.id)
     if (!replacement) return
     update((state) => ({ ...state, ...reconcileMusicLibrary(state.tracks.map((item) => item.id === track.id ? { ...replacement, createdAt: item.createdAt } : item), state.albums) }))
   }
 
   const saveMetadata = async (input: MusicMetadataUpdate) => {
-    if (!window.siyue) return
+    if (!window.sylunae) return
     const element = audio.current
     const isCurrent = currentId === input.id && Boolean(element?.src)
     const wasPlaying = isCurrent && playing
@@ -132,12 +132,12 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
       element.load()
     }
     try {
-      const replacement = await window.siyue.music.updateMetadata(input)
+      const replacement = await window.sylunae.music.updateMetadata(input)
       update((state) => ({ ...state, ...reconcileMusicLibrary(state.tracks.map((item) => item.id === input.id ? { ...replacement, createdAt: item.createdAt } : item), state.albums) }))
     } finally {
       if (isCurrent && element) {
         try {
-          const url = await window.siyue.music.getAudioUrl(input.path)
+          const url = await window.sylunae.music.getAudioUrl(input.path)
           element.src = url
           await new Promise<void>((resolve, reject) => {
             const loaded = () => { cleanup(); resolve() }
@@ -162,7 +162,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
     update((state) => ({ ...state, albums: state.albums.map((album) => album.id === albumId ? { ...album, cover, updatedAt: new Date().toISOString() } : album) }))
   }
 
-  if (!window.siyue) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
+  if (!window.sylunae) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
 
   return <section className="page music-page">
     <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={17} />添加音乐</Button></header>
