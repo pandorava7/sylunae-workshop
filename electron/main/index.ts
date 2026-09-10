@@ -399,6 +399,44 @@ function isPrivateHost(hostname: string): boolean {
   return isIP(host) === 6 && (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb'))
 }
 
+function faviconFromHtml(html: string, pageUrl: URL): string | null {
+  const links = html.match(/<link\b[^>]*>/gi) ?? []
+  for (const link of links) {
+    const relMatch = /\brel\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(link)
+    const rel = (relMatch?.[1] ?? relMatch?.[2] ?? relMatch?.[3] ?? '').toLowerCase()
+    if (!/(^|\s)(apple-touch-icon|shortcut\s+icon|icon)(\s|$)/.test(rel)) continue
+    const href = /\bhref\s*=\s*["']([^"']+)["']|\bhref\s*=\s*([^\s>]+)/i.exec(link)
+    const value = href?.[1] ?? href?.[2]
+    if (!value || value.startsWith('data:')) continue
+    try {
+      const iconUrl = new URL(value, pageUrl)
+      if (iconUrl.protocol === 'http:' || iconUrl.protocol === 'https:') return iconUrl.toString()
+    } catch { /* Try the next declared icon. */ }
+  }
+  return null
+}
+
+async function findFavicon(rawUrl: string): Promise<string | null> {
+  if (typeof rawUrl !== 'string' || rawUrl.length > 4096) return null
+  let url: URL
+  try { url = new URL(rawUrl) } catch { return null }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || isPrivateHost(url.hostname)) return null
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 6000)
+  try {
+    const response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Sylunae-Workshop/0.1' } })
+    const finalUrl = new URL(response.url)
+    if (!response.ok || !['http:', 'https:'].includes(finalUrl.protocol) || isPrivateHost(finalUrl.hostname)) return null
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('text/html')) {
+      const html = (await response.text()).slice(0, 512 * 1024)
+      const declared = faviconFromHtml(html, finalUrl)
+      if (declared) return declared
+    }
+    return new URL('/favicon.ico', finalUrl).toString()
+  } catch { return null } finally { clearTimeout(timeout) }
+}
+
 function checkedRemoteImport(input: MusicRemoteImport): { taskId: string; source: MusicRemoteImport['source']; url: URL; directory: string } {
   if (!input || typeof input.taskId !== 'string' || !/^[a-zA-Z0-9-]{1,64}$/.test(input.taskId) || !['youtube', 'audio-url'].includes(input.source) || typeof input.url !== 'string' || input.url.length > 4096 || typeof input.directory !== 'string') {
     throw new Error('导入参数无效')
@@ -828,10 +866,10 @@ function registerIpc(): void {
     }))
   })
 
-  ipcMain.handle('backup:export', async (_event, contents: string) => {
+  ipcMain.handle('backup:export', async (_event, contents: string, defaultName?: string) => {
     const result = await dialog.showSaveDialog({
       title: '导出丝月工坊备份',
-      defaultPath: `sylunae-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      defaultPath: typeof defaultName === 'string' && /^[a-zA-Z0-9_-]+\.json$/.test(defaultName) ? defaultName : `sylunae-backup-${new Date().toISOString().slice(0, 10)}.json`,
       filters: [{ name: 'JSON 备份', extensions: ['json'] }],
     })
     if (result.canceled || !result.filePath) return false
@@ -851,6 +889,7 @@ function registerIpc(): void {
   ipcMain.handle('system:open-external', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
+  ipcMain.handle('system:find-favicon', (_event, url: string) => findFavicon(url))
 }
 
 app.whenReady().then(() => {

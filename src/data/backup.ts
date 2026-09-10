@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AppSnapshot, BackupEnvelope } from '../shared/types'
+import type { AppSettings, AppSnapshot, BackupEnvelope, PartialBackupEnvelope, PartialBackupSection } from '../shared/types'
 import { normalizeThemePalettes } from '../shared/theme'
 import { normalizeImageLibrary } from '../images/library'
 
@@ -42,7 +42,7 @@ const goalSchema = z.object({ id: z.string(), title: z.string(), description: z.
 const todoSchema = z.object({ id: z.string(), title: z.string(), priority: z.enum(['low', 'medium', 'high']), dueDate: z.string(), completed: z.boolean(), createdAt: timestamp, updatedAt: timestamp })
 const pomodoroSchema = z.object({ mode: z.enum(['focus', 'shortBreak', 'longBreak']), focusMinutes: z.number(), shortBreakMinutes: z.number(), longBreakMinutes: z.number(), sessionsBeforeLongBreak: z.number(), completedSessions: z.number(), secondsRemaining: z.number(), running: z.boolean(), endsAt: z.string().nullable() })
 const clipboardSchema = z.object({ id: z.string(), title: z.string(), content: z.string(), category: z.string(), copyCount: z.number().int().nonnegative().optional().default(0), createdAt: timestamp, updatedAt: timestamp })
-const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), createdAt: timestamp, updatedAt: timestamp })
+const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), faviconUrl: z.string().optional(), archived: z.boolean().optional().default(false), createdAt: timestamp, updatedAt: timestamp })
 const imageRootSchema = z.object({ id: z.string(), path: z.string(), name: z.string(), recursive: z.boolean(), identity: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp, lastScannedAt: timestamp.nullable(), collectionId: z.string().nullable().optional() })
 const imageCollectionSchema = z.object({ id: z.string(), name: z.string(), createdAt: timestamp, updatedAt: timestamp })
 const imageAssetSchema = z.object({ id: z.string(), rootId: z.string().nullable().optional(), collectionIds: z.array(z.string()).optional(), path: z.string(), relativePath: z.string(), name: z.string(), extension: z.string(), size: z.number().nonnegative(), mtimeMs: z.number().nonnegative(), width: z.number().nonnegative(), height: z.number().nonnegative(), aspectType: z.enum(['landscape', 'portrait', 'square']), identity: z.string(), hash: z.string(), missing: z.boolean(), metadata: z.record(z.string(), z.unknown()).optional().default({}), createdAt: timestamp, updatedAt: timestamp })
@@ -68,8 +68,71 @@ const envelopeSchema = z.object({
   }),
 })
 
+const partialSections = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'] as const satisfies readonly PartialBackupSection[]
+const imageLibrarySchema = z.object({ roots: z.array(imageRootSchema), collections: z.array(imageCollectionSchema).optional().default([]), assets: z.array(imageAssetSchema) })
+const partialPayloadSchemas: Record<PartialBackupSection, z.ZodType> = {
+  home: z.object({ displayName: z.string(), homeWallpaper: z.string(), homeWallpapers: z.array(homeWallpaperSchema), homeQuickActions: z.array(z.enum(['new-note', 'new-todo', 'pomodoro', 'music', 'collection'])), weatherLocation: weatherLocationSchema, weatherCache: weatherSnapshotSchema.nullable() }),
+  tasks: z.object({ goals: z.array(goalSchema), todos: z.array(todoSchema), pomodoro: pomodoroSchema }),
+  notes: z.object({ folders: z.array(folderSchema), notes: z.array(noteSchema) }),
+  music: z.object({ tracks: z.array(trackSchema), albums: z.array(albumSchema) }),
+  collection: z.object({ bangumi: z.object({ username: z.string(), items: z.array(bangumiItemSchema), syncedAt: timestamp }).nullable(), bangumiUsername: z.string() }),
+  tools: z.object({ clipboardSnippets: z.array(clipboardSchema), launcherLinks: z.array(launcherSchema), imageLibrary: imageLibrarySchema }),
+  settings: settingsSchema,
+}
+
 export function createBackup(snapshot: AppSnapshot): BackupEnvelope {
   return { format: 'siyue-workshop-backup', version: 1, exportedAt: new Date().toISOString(), snapshot }
+}
+
+export const partialBackupSectionMeta: Array<{ id: PartialBackupSection; label: string; description: string }> = [
+  { id: 'home', label: '首页', description: '主页资料、壁纸、天气与快捷入口' },
+  { id: 'tasks', label: '任务箱', description: '目标、待办与番茄钟' },
+  { id: 'notes', label: '笔记本', description: '笔记与文件夹' },
+  { id: 'music', label: '音乐库', description: '音乐和专辑索引，不含原始文件' },
+  { id: 'collection', label: '收藏馆', description: 'Bangumi 收藏缓存与用户名' },
+  { id: 'tools', label: '工具箱', description: '剪贴板、链接启动器与图片索引' },
+  { id: 'settings', label: '设置', description: '主题、界面偏好和关联服务' },
+]
+
+export function createPartialBackup(snapshot: AppSnapshot, section: PartialBackupSection): PartialBackupEnvelope {
+  const payload: Record<PartialBackupSection, unknown> = {
+    home: (({ displayName, homeWallpaper, homeWallpapers, homeQuickActions, weatherLocation, weatherCache }) => ({ displayName, homeWallpaper, homeWallpapers, homeQuickActions, weatherLocation, weatherCache }))(snapshot.settings),
+    tasks: (({ goals, todos, pomodoro }) => ({ goals, todos, pomodoro }))(snapshot),
+    notes: (({ folders, notes }) => ({ folders, notes }))(snapshot),
+    music: (({ tracks, albums }) => ({ tracks, albums }))(snapshot),
+    collection: { bangumi: snapshot.bangumi, bangumiUsername: snapshot.settings.bangumiUsername },
+    tools: (({ clipboardSnippets, launcherLinks, imageLibrary }) => ({ clipboardSnippets, launcherLinks, imageLibrary }))(snapshot),
+    settings: snapshot.settings,
+  }
+  return { format: 'siyue-workshop-partial-backup', version: 1, section, exportedAt: new Date().toISOString(), payload: payload[section] }
+}
+
+export function parsePartialBackup(contents: string): PartialBackupEnvelope {
+  const base = z.object({ format: z.literal('siyue-workshop-partial-backup'), version: z.literal(1), section: z.enum(partialSections), exportedAt: timestamp, payload: z.unknown() }).parse(JSON.parse(contents))
+  const payload = partialPayloadSchemas[base.section].parse(base.payload)
+  if (base.section === 'settings') return { ...base, payload: { ...(payload as AppSettings), themePalettes: normalizeThemePalettes((payload as AppSettings).themePalettes) } }
+  if (base.section === 'tools') return { ...base, payload: { ...(payload as { imageLibrary: AppSnapshot['imageLibrary'] }), imageLibrary: normalizeImageLibrary((payload as { imageLibrary: AppSnapshot['imageLibrary'] }).imageLibrary) } }
+  return { ...base, payload }
+}
+
+export function applyPartialBackup(current: AppSnapshot, backup: PartialBackupEnvelope): AppSnapshot {
+  const updatedAt = new Date().toISOString()
+  switch (backup.section) {
+    case 'home': return { ...current, settings: { ...current.settings, ...(backup.payload as Pick<AppSettings, 'displayName' | 'homeWallpaper' | 'homeWallpapers' | 'homeQuickActions' | 'weatherLocation' | 'weatherCache'>), updatedAt } }
+    case 'tasks': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'goals' | 'todos' | 'pomodoro'>) }
+    case 'notes': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'folders' | 'notes'>) }
+    case 'music': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'tracks' | 'albums'>) }
+    case 'collection': {
+      const payload = backup.payload as { bangumi: AppSnapshot['bangumi']; bangumiUsername: string }
+      return { ...current, bangumi: payload.bangumi, settings: { ...current.settings, bangumiUsername: payload.bangumiUsername, updatedAt } }
+    }
+    case 'tools': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'clipboardSnippets' | 'launcherLinks' | 'imageLibrary'>) }
+    case 'settings': return { ...current, settings: { ...(backup.payload as AppSettings), updatedAt } }
+  }
+}
+
+export function partialBackupSummary(backup: PartialBackupEnvelope): string {
+  return partialBackupSectionMeta.find((item) => item.id === backup.section)?.label ?? '局部数据'
 }
 
 export function parseBackup(contents: string): BackupEnvelope {

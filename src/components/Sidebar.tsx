@@ -1,5 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { BookHeart, Boxes, ChevronLeft, ChevronRight, Download, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { BookHeart, Boxes, ChevronRight, Download, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
 import type { MusicTrack, ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
 
@@ -34,19 +34,21 @@ function downloadDesktopApp() {
     .catch(() => openExternal('https://github.com/pandorava7/sylunae-workshop/releases/latest'))
 }
 
-export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlaying, onSelect, onOpenSettings, onToggle, onOpen, onClose }: {
+export function Sidebar({ active, collapsed, width, mobileOpen, settingsOpen, nowPlaying, onSelect, onOpenSettings, onResize, onOpen, onClose }: {
   active: ToolId
   collapsed: boolean
+  width: number
   mobileOpen: boolean
   settingsOpen: boolean
   nowPlaying: MusicTrack | null
   onSelect: (tool: ToolId) => void
   onOpenSettings: () => void
-  onToggle: () => void
+  onResize: (width: number) => void
   onOpen: () => void
   onClose: () => void
 }) {
   const [displayTrack, setDisplayTrack] = useState<MusicTrack | null>(nowPlaying)
+  const resizeStart = useRef<{ x: number; width: number } | null>(null)
 
   useEffect(() => {
     if (nowPlaying) setDisplayTrack(nowPlaying)
@@ -54,13 +56,29 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlayin
 
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
   const openSettings = () => { onOpenSettings(); onClose() }
+  const startResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (window.matchMedia('(max-width: 760px)').matches) return
+    resizeStart.current = { x: event.clientX, width }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    document.body.classList.add('sidebar-resizing')
+  }
+  const resize = (event: PointerEvent<HTMLDivElement>) => {
+    if (!resizeStart.current) return
+    onResize(resizeStart.current.width + event.clientX - resizeStart.current.x)
+  }
+  const stopResize = () => {
+    resizeStart.current = null
+    document.body.classList.remove('sidebar-resizing')
+  }
+
+  useEffect(() => () => document.body.classList.remove('sidebar-resizing'), [])
   return <>
     <button className="mobile-menu" onClick={onOpen} aria-label="打开导航"><Menu size={20} /></button>
     {mobileOpen && <button className="sidebar-backdrop" onClick={onClose} aria-label="关闭导航" />}
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <button className={`brand ${active === 'home' ? 'active' : ''}`} onClick={() => select('home')} title="返回主页" aria-label="返回主页">
         <BrandMark />
-        {!collapsed && <div><strong>丝月工坊</strong><span>MY QUIET SPACE</span></div>}
+        {!collapsed && <div className="brand-copy"><strong>丝月工坊</strong><span>MY QUIET SPACE</span></div>}
       </button>
       <div className={`now-playing-slot ${nowPlaying ? 'visible' : ''}`} aria-hidden={!nowPlaying}>
         <button
@@ -89,10 +107,19 @@ export function Sidebar({ active, collapsed, mobileOpen, settingsOpen, nowPlayin
         <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
           <Settings size={19} strokeWidth={1.7} /><span>设置</span>
         </button>
-        <button onClick={onToggle} title={collapsed ? '展开侧栏' : '收起侧栏'}>
-          {collapsed ? <ChevronRight size={19} /> : <ChevronLeft size={19} />}<span>{collapsed ? '' : '收起'}</span>
-        </button>
       </div>
+      <div
+        className="sidebar-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整导航栏宽度"
+        aria-valuemin={70}
+        aria-valuenow={width}
+        onPointerDown={startResize}
+        onPointerMove={resize}
+        onPointerUp={stopResize}
+        onPointerCancel={stopResize}
+      />
     </aside>
   </>
 }

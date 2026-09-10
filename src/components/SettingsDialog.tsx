@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, Globe2, HardDrive, Info, Laptop, Link2, Moon, Palette, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
-import { backupSummary, createBackup, parseBackup } from '../data/backup'
-import type { BackupEnvelope, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
+import { applyPartialBackup, backupSummary, createBackup, createPartialBackup, parseBackup, parsePartialBackup, partialBackupSectionMeta, partialBackupSummary } from '../data/backup'
+import type { BackupEnvelope, PartialBackupEnvelope, PartialBackupSection, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
 import { getThemeContrastIssues, normalizeThemePalettes, parseThemePalettes, serializeThemePalettes, themeColorFields, themeContrastMessage, themeCssVariables } from '../shared/theme'
 import { nowIso } from '../utils'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -51,7 +51,9 @@ function SettingsPanel() {
   const [username, setUsername] = useState(snapshot?.settings.bangumiUsername || '')
   const [message, setMessage] = useState('')
   const [pendingImport, setPendingImport] = useState<BackupEnvelope | null>(null)
+  const [pendingPartialImport, setPendingPartialImport] = useState<PartialBackupEnvelope | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
+  const partialImportInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => setUsername(snapshot?.settings.bangumiUsername || ''), [snapshot?.settings.bangumiUsername])
   if (!snapshot) return null
@@ -81,6 +83,26 @@ function SettingsPanel() {
       setMessage('备份已下载。')
     }
   }
+  const downloadContents = async (contents: string, filename: string, successMessage: string) => {
+    if (window.sylunae) {
+      const saved = await window.sylunae.backup.exportFile(contents, filename)
+      if (saved) setMessage(successMessage)
+      return
+    }
+    const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setMessage(successMessage)
+  }
+  const exportPartialBackup = async (section: PartialBackupSection) => {
+    await flush()
+    const item = partialBackupSectionMeta.find((entry) => entry.id === section)!
+    const contents = JSON.stringify(createPartialBackup(snapshot, section), null, 2)
+    await downloadContents(contents, `siyue-${section}-backup-${new Date().toISOString().slice(0, 10)}.json`, `“${item.label}”局部备份已导出。`)
+  }
   const applyImport = async (contents: string) => {
     try {
       setPendingImport(parseBackup(contents))
@@ -94,6 +116,21 @@ function SettingsPanel() {
       if (contents) await applyImport(contents)
     } else {
       importInput.current?.click()
+    }
+  }
+  const applyPartialImport = async (contents: string) => {
+    try {
+      setPendingPartialImport(parsePartialBackup(contents))
+    } catch {
+      setMessage('无法导入：文件不是有效的局部备份。')
+    }
+  }
+  const importPartialBackup = async () => {
+    if (window.sylunae) {
+      const contents = await window.sylunae.backup.importFile()
+      if (contents) await applyPartialImport(contents)
+    } else {
+      partialImportInput.current?.click()
     }
   }
 
@@ -114,12 +151,13 @@ function SettingsPanel() {
       <div className="settings-section-body">
         {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} onThemeChange={setTheme} onPalettesChange={setThemePalettes} />}
         {activeSection === 'connections' && <ConnectionSettings username={username} onUsernameChange={setUsername} onSave={saveUsername} />}
-        {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} />}
+        {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} onExportPartial={(section) => void exportPartialBackup(section)} onImportPartial={() => void importPartialBackup()} partialInputRef={partialImportInput} onPartialFile={(file) => void file.text().then(applyPartialImport)} />}
         {activeSection === 'about' && <AboutSettings />}
       </div>
     </main>
 
     <ConfirmDialog open={Boolean(pendingImport)} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingImport(null) }} title="覆盖当前本地数据？" description={<>{pendingImport && <span className="backup-preview">{backupSummary(pendingImport)}</span>}<span>当前数据将被备份内容替换，建议先导出现有备份。</span></>} confirmLabel="覆盖并导入" destructive icon={<FileWarning />} onConfirm={async () => { if (!pendingImport) return; await replace(pendingImport.snapshot); setPendingImport(null); setMessage('备份已导入。') }} />
+    <ConfirmDialog open={Boolean(pendingPartialImport)} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingPartialImport(null) }} title={`导入“${pendingPartialImport ? partialBackupSummary(pendingPartialImport) : ''}”局部备份？`} description={<><span className="backup-preview">{pendingPartialImport && partialBackupSummary(pendingPartialImport)}</span><span>仅替换这个页面的数据，其他页面内容会保留。</span></>} confirmLabel="覆盖并导入" destructive icon={<FileWarning />} onConfirm={async () => { if (!pendingPartialImport) return; await replace(applyPartialBackup(snapshot, pendingPartialImport)); setPendingPartialImport(null); setMessage(`“${partialBackupSummary(pendingPartialImport)}”局部备份已导入。`) }} />
   </div>
 }
 
@@ -206,8 +244,8 @@ function ConnectionSettings({ username, onUsernameChange, onSave }: { username: 
   return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。封面会缓存到本地；在收藏库中点击“刷新”即可重新读取数据并更新封面。</small></label><Button variant="link" className="text-link" onClick={() => window.sylunae?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
 }
 
-function DataSettings({ counts, onExport, onImport, inputRef, onFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void }) {
-  return <section className="settings-pane"><SettingHeading icon={<Database />} title="本地数据" description="为重要内容留一份可以带走的副本。" /><div className="data-summary"><div><NotebookCount value={counts.notes} label="笔记" /></div><div><NotebookCount value={counts.goals} label="目标" /></div><div><NotebookCount value={counts.tracks} label="音乐索引" /></div></div><div className="settings-actions"><Button variant="outline" className="button secondary" onClick={onExport}><Download size={16} />导出备份</Button><Button variant="outline" className="button secondary" onClick={onImport}><Upload size={16} />导入备份</Button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.currentTarget.value = '' }} /></div><small className="settings-note">备份包含笔记、目标、设置和音乐索引，不包含音乐原文件与实时 Bangumi 数据。</small></section>
+function DataSettings({ counts, onExport, onImport, inputRef, onFile, onExportPartial, onImportPartial, partialInputRef, onPartialFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void; onExportPartial: (section: PartialBackupSection) => void; onImportPartial: () => void; partialInputRef: React.RefObject<HTMLInputElement | null>; onPartialFile: (file: File) => void }) {
+  return <section className="settings-pane"><SettingHeading icon={<Database />} title="本地数据" description="为重要内容留一份可以带走的副本。" /><div className="data-summary"><div><NotebookCount value={counts.notes} label="笔记" /></div><div><NotebookCount value={counts.goals} label="目标" /></div><div><NotebookCount value={counts.tracks} label="音乐索引" /></div></div><div className="settings-actions"><Button variant="outline" className="button secondary" onClick={onExport}><Download size={16} />导出完整备份</Button><Button variant="outline" className="button secondary" onClick={onImport}><Upload size={16} />导入完整备份</Button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.currentTarget.value = '' }} /></div><small className="settings-note">完整备份包含所有页面数据，不包含音乐原文件与实时 Bangumi 数据。</small><div className="partial-backup-heading"><div><strong>局部备份</strong><small>按页面导出；导入时只替换对应页面。</small></div><Button variant="outline" className="button secondary" onClick={onImportPartial}><Upload size={15} />导入局部备份</Button></div><div className="partial-backup-grid">{partialBackupSectionMeta.map((section) => <div className="partial-backup-item" key={section.id}><div><strong>{section.label}</strong><small>{section.description}</small></div><Button variant="ghost" size="sm" className="partial-backup-export" onClick={() => onExportPartial(section.id)}><Download size={14} />导出</Button></div>)}</div><input ref={partialInputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) onPartialFile(file); event.currentTarget.value = '' }} /></section>
 }
 
 function AboutSettings() {

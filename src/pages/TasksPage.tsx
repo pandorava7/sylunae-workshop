@@ -21,6 +21,7 @@ const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
 export function TasksPage({ initialView = 'goals', startPomodoro = false }: { initialView?: TaskView; startPomodoro?: boolean }) {
   const [view, setView] = useState<TaskView>(initialView)
   const pageRef = useRef<HTMLElement>(null)
+  useEffect(() => setView(initialView), [initialView])
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
   return <section ref={pageRef} className="page tasks-page">
     <header className="page-header"><div><span className="eyebrow">TASK SPACE</span><h1>任务箱</h1><p>让计划、专注与日常小事在同一个地方有序发生</p></div></header>
@@ -84,25 +85,6 @@ function PomodoroPanel({ autoStart = false }: { autoStart?: boolean }) {
     autoStarted.current = true
     update((state) => ({ ...state, pomodoro: { ...state.pomodoro, running: true, endsAt: new Date(Date.now() + state.pomodoro.secondsRemaining * 1000).toISOString() } }))
   }, [autoStart, timer.running, update])
-
-  useEffect(() => {
-    if (!timer.running || !timer.endsAt) return
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((new Date(timer.endsAt!).getTime() - Date.now()) / 1000))
-      if (remaining > 0) { update((state) => ({ ...state, pomodoro: { ...state.pomodoro, secondsRemaining: remaining } })); return }
-      update((state) => {
-        const finishedFocus = state.pomodoro.mode === 'focus'
-        const completedSessions = state.pomodoro.completedSessions + (finishedFocus ? 1 : 0)
-        const nextMode: PomodoroMode = finishedFocus ? (completedSessions % state.pomodoro.sessionsBeforeLongBreak === 0 ? 'longBreak' : 'shortBreak') : 'focus'
-        const minutes = nextMode === 'focus' ? state.pomodoro.focusMinutes : nextMode === 'shortBreak' ? state.pomodoro.shortBreakMinutes : state.pomodoro.longBreakMinutes
-        return { ...state, pomodoro: { ...state.pomodoro, mode: nextMode, completedSessions, secondsRemaining: minutes * 60, running: false, endsAt: null } }
-      })
-      if ('Notification' in window && Notification.permission === 'granted') new Notification('丝月工坊', { body: timer.mode === 'focus' ? '本轮专注完成，休息一下吧。' : '休息结束，准备开始下一轮专注。' })
-    }
-    tick()
-    const id = window.setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [timer.running, timer.endsAt, timer.mode, update])
 
   const minutesFor = (mode: PomodoroMode) => mode === 'focus' ? timer.focusMinutes : mode === 'shortBreak' ? timer.shortBreakMinutes : timer.longBreakMinutes
   const switchMode = (mode: PomodoroMode) => update((state) => ({ ...state, pomodoro: { ...state.pomodoro, mode, secondsRemaining: minutesFor(mode) * 60, running: false, endsAt: null } }))

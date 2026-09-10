@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
+import { Clock3 } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
-import type { MusicTrack, ToolId, WorkspaceToolId } from './shared/types'
+import type { MusicTrack, PomodoroMode, ToolId, WorkspaceToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -14,6 +15,15 @@ const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ def
 const HomePage = lazy(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
 
+const collapsedSidebarWidth = 70
+const minimumSidebarWidth = 220
+const sidebarCollapseThreshold = 180
+const pomodoroModeLabels: Record<PomodoroMode, string> = { focus: '专注', shortBreak: '短休息', longBreak: '长休息' }
+
+function pomodoroDuration(timer: { mode: PomodoroMode; focusMinutes: number; shortBreakMinutes: number; longBreakMinutes: number }) {
+  return (timer.mode === 'focus' ? timer.focusMinutes : timer.mode === 'shortBreak' ? timer.shortBreakMinutes : timer.longBreakMinutes) * 60
+}
+
 export default function App() {
   const { snapshot, loading, saving, error, update } = useAppStore()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -24,6 +34,7 @@ export default function App() {
   const [pageScrolled, setPageScrolled] = useState(false)
   const [activeTool, setActiveTool] = useState<ToolId>('home')
   const [homeIntent, setHomeIntent] = useState<'new-note' | 'todos' | 'pomodoro' | 'clipboard' | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(300)
 
   useEffect(() => {
     if (!snapshot) return
@@ -58,6 +69,28 @@ export default function App() {
 
   useEffect(() => setPageScrolled(false), [activeTool])
 
+  useEffect(() => {
+    if (!snapshot?.pomodoro.running || !snapshot.pomodoro.endsAt) return
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((new Date(snapshot.pomodoro.endsAt!).getTime() - Date.now()) / 1000))
+      if (remaining > 0) {
+        update((state) => state.pomodoro.secondsRemaining === remaining ? state : { ...state, pomodoro: { ...state.pomodoro, secondsRemaining: remaining } })
+        return
+      }
+      update((state) => {
+        const finishedFocus = state.pomodoro.mode === 'focus'
+        const completedSessions = state.pomodoro.completedSessions + (finishedFocus ? 1 : 0)
+        const nextMode: PomodoroMode = finishedFocus ? (completedSessions % state.pomodoro.sessionsBeforeLongBreak === 0 ? 'longBreak' : 'shortBreak') : 'focus'
+        const minutes = nextMode === 'focus' ? state.pomodoro.focusMinutes : nextMode === 'shortBreak' ? state.pomodoro.shortBreakMinutes : state.pomodoro.longBreakMinutes
+        return { ...state, pomodoro: { ...state.pomodoro, mode: nextMode, completedSessions, secondsRemaining: minutes * 60, running: false, endsAt: null } }
+      })
+      if ('Notification' in window && Notification.permission === 'granted') new Notification('丝月工坊', { body: snapshot.pomodoro.mode === 'focus' ? '本轮专注完成，休息一下吧。' : '休息结束，准备开始下一轮专注。' })
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [snapshot?.pomodoro.running, snapshot?.pomodoro.endsAt, snapshot?.pomodoro.mode, update])
+
   if (loading || !snapshot) return <div className="app-loading"><Spinner /><span>正在打开丝月工坊…</span></div>
 
   const selectTool = (tool: ToolId) => {
@@ -78,7 +111,19 @@ export default function App() {
       return { ...state, settings: { ...state.settings, lastTool: tool, recentTools, toolUsage: { ...state.settings.toolUsage, [tool]: new Date().toISOString() }, updatedAt: new Date().toISOString() } }
     })
   }
-  const toggleSidebar = () => update((state) => ({ ...state, settings: { ...state.settings, sidebarCollapsed: !state.settings.sidebarCollapsed, updatedAt: new Date().toISOString() } }))
+  const openPomodoro = () => openFromHome('tasks', 'pomodoro')
+  const setSidebarCollapsed = (collapsed: boolean) => update((state) => {
+    if (state.settings.sidebarCollapsed === collapsed) return state
+    return { ...state, settings: { ...state.settings, sidebarCollapsed: collapsed, updatedAt: new Date().toISOString() } }
+  })
+  const resizeSidebar = (nextWidth: number) => {
+    if (nextWidth <= sidebarCollapseThreshold) {
+      setSidebarCollapsed(true)
+      return
+    }
+    setSidebarWidth(Math.max(minimumSidebarWidth, nextWidth))
+    setSidebarCollapsed(false)
+  }
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
   const page = {
     home: <HomePage onOpenTool={openFromHome} />,
@@ -89,9 +134,20 @@ export default function App() {
     notes: <NotesPage createOnOpen={homeIntent === 'new-note'} />,
   }[activeTool === 'settings' ? 'home' : activeTool]
 
-  return <TooltipProvider><div className="app-shell">
-    <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onToggle={toggleSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
-    {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''}`} aria-hidden="true"><div className="app-titlebar-drag" /></div>}
+  const renderedSidebarWidth = snapshot.settings.sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth
+  const pomodoroTotal = Math.max(1, pomodoroDuration(snapshot.pomodoro))
+  const pomodoroProgress = Math.min(100, Math.max(0, ((pomodoroTotal - snapshot.pomodoro.secondsRemaining) / pomodoroTotal) * 100))
+  const pomodoroTime = `${String(Math.floor(snapshot.pomodoro.secondsRemaining / 60)).padStart(2, '0')}:${String(snapshot.pomodoro.secondsRemaining % 60).padStart(2, '0')}`
+
+  return <TooltipProvider><div className="app-shell" style={{ '--sidebar-width': `${renderedSidebarWidth}px` } as CSSProperties}>
+    <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
+    {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''} ${snapshot.pomodoro.running ? 'pomodoro-running' : ''}`}>
+      <div className="app-titlebar-drag" />
+      {snapshot.pomodoro.running && <button type="button" className="pomodoro-titlebar" onClick={openPomodoro} aria-label={`打开番茄钟：${pomodoroModeLabels[snapshot.pomodoro.mode]}中，剩余 ${pomodoroTime}`}>
+        <Clock3 size={14} strokeWidth={1.8} /><span>{pomodoroModeLabels[snapshot.pomodoro.mode]}中</span><strong>{pomodoroTime}</strong>
+      </button>}
+      {snapshot.pomodoro.running && <i className="pomodoro-titlebar-progress" style={{ '--pomodoro-progress': `${pomodoroProgress}%` } as CSSProperties} aria-hidden="true" />}
+    </div>}
     <main className="content-shell" onScrollCapture={(event) => {
       const target = event.target
       if (target instanceof HTMLElement) setPageScrolled((current) => {

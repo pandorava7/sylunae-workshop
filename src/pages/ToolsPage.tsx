@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Check,
+  Archive,
+  ArchiveRestore,
   Clipboard,
   Copy,
   ExternalLink,
   FileImage,
   ImageDown,
   Link2,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -34,6 +37,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 type ToolView = "home" | "clipboard" | "launcher" | "image";
 
@@ -551,6 +555,11 @@ function LauncherTool() {
   const { snapshot, update } = useAppStore();
   const links = snapshot?.launcherLinks ?? [];
   const [creating, setCreating] = useState(false);
+  const [editingLink, setEditingLink] = useState<LauncherLink | null>(null);
+  const [view, setView] = useState<"active" | "archived">("active");
+  const activeLinks = links.filter((link) => !link.archived);
+  const archivedLinks = links.filter((link) => link.archived);
+  const visibleLinks = view === "active" ? activeLinks : archivedLinks;
   const open = (url: string) =>
     window.sylunae?.system.openExternal(url) ??
     window.open(url, "_blank", "noopener,noreferrer");
@@ -561,7 +570,7 @@ function LauncherTool() {
     update((state) => ({
       ...state,
       launcherLinks: [
-        { ...input, id: newId(), createdAt: now, updatedAt: now },
+        { ...input, archived: false, id: newId(), createdAt: now, updatedAt: now },
         ...state.launcherLinks,
       ],
     }));
@@ -579,8 +588,14 @@ function LauncherTool() {
           添加链接
         </Button>
       </div>
+      <Tabs value={view} onValueChange={(value) => setView(value as "active" | "archived")} className="launcher-view-tabs">
+        <TabsList>
+          <TabsTrigger value="active"><Link2 size={15} />常用 <span>{activeLinks.length}</span></TabsTrigger>
+          <TabsTrigger value="archived"><Archive size={15} />归档 <span>{archivedLinks.length}</span></TabsTrigger>
+        </TabsList>
+      </Tabs>
       <div className="launcher-grid">
-        {links.map((link) => {
+        {visibleLinks.map((link) => {
           let host = "";
           try {
             host = new URL(link.url).hostname.replace(/^www\./, "");
@@ -588,57 +603,151 @@ function LauncherTool() {
             host = link.url;
           }
           return (
-            <article className="launcher-card" key={link.id}>
-              <button className="launcher-open" onClick={() => open(link.url)}>
-                <span className="site-favicon">
-                  {link.title.slice(0, 1).toUpperCase()}
-                </span>
+            <article
+              className="launcher-card"
+              key={link.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`打开 ${link.title}`}
+              onClick={() => open(link.url)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  open(link.url);
+                }
+              }}
+            >
+              <div className="launcher-open">
+                <SiteFavicon link={link} />
                 <div>
                   <strong>{link.title}</strong>
                   <small>{host}</small>
                 </div>
                 <ExternalLink size={16} />
-              </button>
+              </div>
               <p>{link.description || "未添加说明"}</p>
-              <button
-                className="launcher-delete"
-                onClick={() =>
-                  update((state) => ({
-                    ...state,
-                    launcherLinks: state.launcherLinks.filter(
-                      (item) => item.id !== link.id,
-                    ),
-                  }))
-                }
-              >
-                <Trash2 size={14} />
-                移除
-              </button>
+              <div className="launcher-actions">
+                <div className="launcher-actions-primary">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="launcher-edit"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEditingLink(link);
+                    }}
+                  >
+                    <Pencil size={14} />
+                    编辑
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="launcher-archive"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      update((state) => ({
+                        ...state,
+                        launcherLinks: state.launcherLinks.map((item) => item.id === link.id ? { ...item, archived: !link.archived, updatedAt: nowIso() } : item),
+                      }));
+                    }}
+                  >
+                    {link.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                    {link.archived ? "恢复" : "归档"}
+                  </Button>
+                </div>
+                <button
+                  className="launcher-delete"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    update((state) => ({
+                      ...state,
+                      launcherLinks: state.launcherLinks.filter(
+                        (item) => item.id !== link.id,
+                      ),
+                    }));
+                  }}
+                >
+                  <Trash2 size={14} />
+                  移除
+                </button>
+              </div>
             </article>
           );
         })}
       </div>
-      {!links.length && (
-        <ToolEmpty icon={<Link2 />} text="添加一个常用链接，下一次打开会更快" />
-      )}
+      {!visibleLinks.length && <ToolEmpty icon={view === "active" ? <Link2 /> : <Archive />} text={view === "active" ? "添加一个常用链接，下一次打开会更快" : "归档链接会安静地保留在这里"} />}
       {creating && (
         <LinkDialog onClose={() => setCreating(false)} onSave={save} />
+      )}
+      {editingLink && (
+        <LinkDialog
+          link={editingLink}
+          onClose={() => setEditingLink(null)}
+          onSave={(input) => {
+            const now = nowIso();
+            update((state) => ({
+              ...state,
+              launcherLinks: state.launcherLinks.map((item) =>
+                item.id === editingLink.id ? { ...item, ...input, updatedAt: now } : item,
+              ),
+            }));
+            setEditingLink(null);
+          }}
+        />
       )}
     </div>
   );
 }
 
+function SiteFavicon({ link }: { link: LauncherLink }) {
+  const [failed, setFailed] = useState(false);
+  const fallback = link.title.slice(0, 1).toUpperCase();
+  const faviconUrl = link.faviconUrl || faviconFallback(link.url);
+  return (
+    <span className="site-favicon" aria-label={`${link.title} 图标`}>
+      {!failed && faviconUrl ? <img src={faviconUrl} alt="" onError={() => setFailed(true)} /> : fallback}
+    </span>
+  );
+}
+
+function faviconFallback(url: string): string | null {
+  try {
+    const origin = new URL(url).origin;
+    return `${origin}/favicon.ico`;
+  } catch {
+    return null;
+  }
+}
+
 function LinkDialog({
+  link,
   onClose,
   onSave,
 }: {
+  link?: LauncherLink;
   onClose: () => void;
   onSave: (value: Omit<LauncherLink, "id" | "createdAt" | "updatedAt">) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(link?.title ?? "");
+  const [url, setUrl] = useState(link?.url ?? "");
+  const [description, setDescription] = useState(link?.description ?? "");
+  const [saving, setSaving] = useState(false);
   const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  const submit = async () => {
+    if (!title.trim() || !url.trim() || saving) return;
+    setSaving(true);
+    let faviconUrl: string | undefined;
+    try {
+      faviconUrl = link?.url === normalized
+        ? link.faviconUrl
+        : (await window.sylunae?.system.findFavicon(normalized)) ?? faviconFallback(normalized) ?? undefined;
+    } finally {
+      setSaving(false);
+    }
+    onSave({ title: title.trim(), url: normalized, description: description.trim(), faviconUrl });
+  };
   return (
     <Dialog
       open
@@ -649,10 +758,10 @@ function LinkDialog({
       <DialogContent className="modal-card">
         <DialogHeader className="modal-title">
           <div>
-            <span className="eyebrow">NEW LINK</span>
-            <DialogTitle>添加链接</DialogTitle>
+            <span className="eyebrow">{link ? "EDIT LINK" : "NEW LINK"}</span>
+            <DialogTitle>{link ? "编辑链接" : "添加链接"}</DialogTitle>
             <DialogDescription>
-              网址图标会以简洁的首字母样式呈现。
+              会尽可能获取网站图标；获取失败时使用名称首字母。
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -692,16 +801,10 @@ function LinkDialog({
           </Button>
           <Button
             className="button primary"
-            disabled={!title.trim() || !url.trim()}
-            onClick={() =>
-              onSave({
-                title: title.trim(),
-                url: normalized,
-                description: description.trim(),
-              })
-            }
+            disabled={!title.trim() || !url.trim() || saving}
+            onClick={() => void submit()}
           >
-            添加
+            {saving ? "正在获取图标…" : link ? "保存修改" : "添加"}
           </Button>
         </DialogFooter>
       </DialogContent>

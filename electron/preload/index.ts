@@ -40,12 +40,13 @@ const api: SylunaeAPI = {
     getUrls: (paths) => ipcRenderer.invoke('images:get-urls', paths),
   },
   backup: {
-    exportFile: (contents) => ipcRenderer.invoke('backup:export', contents),
+    exportFile: (contents, defaultName) => ipcRenderer.invoke('backup:export', contents, defaultName),
     importFile: () => ipcRenderer.invoke('backup:import'),
   },
   system: {
     getTheme: () => ipcRenderer.invoke('system:get-theme'),
     openExternal: (url) => ipcRenderer.invoke('system:open-external', url),
+    findFavicon: (url) => ipcRenderer.invoke('system:find-favicon', url),
   },
 }
 

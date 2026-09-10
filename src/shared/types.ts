@@ -312,6 +312,8 @@ export interface LauncherLink {
   title: string
   url: string
   description: string
+  faviconUrl?: string
+  archived?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -347,6 +349,16 @@ export interface BackupEnvelope {
   snapshot: AppSnapshot
 }
 
+export type PartialBackupSection = 'home' | 'tasks' | 'notes' | 'music' | 'collection' | 'tools' | 'settings'
+
+export interface PartialBackupEnvelope {
+  format: 'siyue-workshop-partial-backup'
+  version: 1
+  section: PartialBackupSection
+  exportedAt: string
+  payload: unknown
+}
+
 export interface SylunaeAPI {
   platform: 'electron'
   storage: {
@@ -378,11 +390,12 @@ export interface SylunaeAPI {
     getUrls: (paths: string[]) => Promise<Record<string, string>>
   }
   backup: {
-    exportFile: (contents: string) => Promise<boolean>
+    exportFile: (contents: string, defaultName?: string) => Promise<boolean>
     importFile: () => Promise<string | null>
   }
   system: {
     getTheme: () => Promise<'light' | 'dark'>
     openExternal: (url: string) => Promise<void>
+    findFavicon: (url: string) => Promise<string | null>
   }
 }
