@@ -302,6 +302,7 @@ export interface ClipboardSnippet {
   title: string
   content: string
   category: string
+  copyCount: number
   createdAt: string
   updatedAt: string
 }

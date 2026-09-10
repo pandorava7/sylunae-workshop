@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Disc3, ImagePlus, Trash2 } from 'lucide-react'
-import type { MusicCoverUpdate, MusicEditableMetadata, MusicMetadataUpdate, MusicTrack } from '../shared/types'
+import type { MusicAlbum, MusicCoverUpdate, MusicEditableMetadata, MusicMetadataUpdate, MusicTrack } from '../shared/types'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { Combobox } from './ui/combobox'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from './ui/sheet'
 import { Textarea } from './ui/textarea'
 import { Spinner } from './Icons'
 
-export function MusicMetadataSheet({ track, onClose, onSave }: {
+export function MusicMetadataSheet({ track, albums, onClose, onSave }: {
   track: MusicTrack
+  albums: MusicAlbum[]
   onClose: () => void
   onSave: (update: MusicMetadataUpdate) => Promise<void>
 }) {
@@ -100,7 +102,7 @@ export function MusicMetadataSheet({ track, onClose, onSave }: {
         <div className="metadata-form">
           <label>标题<Input autoFocus value={metadata.title} onChange={(event) => updateField('title', event.target.value)} /></label>
           <label>艺术家<Input value={metadata.artist} onChange={(event) => updateField('artist', event.target.value)} /></label>
-          <label>专辑<Input value={metadata.album} onChange={(event) => updateField('album', event.target.value)} /></label>
+          <label>专辑<Combobox value={metadata.album} onValueChange={(value) => updateField('album', value)} options={albums.map((album) => album.title)} placeholder="输入或选择已有专辑" emptyMessage="没有匹配的已有专辑，可直接新建" /></label>
           <label>流派<Input value={metadata.genre} onChange={(event) => updateField('genre', event.target.value)} /></label>
           <div className="form-row">
             <label>年份<Input type="number" min={0} max={9999} value={metadata.year ?? ''} onChange={(event) => updateField('year', event.target.value ? Number(event.target.value) : null)} /></label>

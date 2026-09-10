@@ -72,7 +72,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     goals: snapshot.goals ?? [],
     todos: snapshot.todos ?? [],
     pomodoro: { ...defaults.pomodoro, ...snapshot.pomodoro },
-    clipboardSnippets: snapshot.clipboardSnippets ?? [],
+    clipboardSnippets: (snapshot.clipboardSnippets ?? []).map((snippet) => ({ ...snippet, copyCount: snippet.copyCount ?? 0 })),
       launcherLinks: snapshot.launcherLinks ?? [],
       imageLibrary: normalizeImageLibrary(snapshot.imageLibrary),
       bangumi: null,

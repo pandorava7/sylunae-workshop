@@ -639,11 +639,40 @@ input, textarea, select { color: var(--text); }
 .tool-entry-action { margin-top: auto; color: var(--text); font-size: 12px; font-weight: 600; }
 .tool-entry-action span { margin-left: 5px; }
 .snippet-grid, .launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 13px; }
+.snippet-category-create { display: flex; gap: 9px; margin: -4px 0 20px; }
+.snippet-home-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+.snippet-shortcut-section { min-width: 0; }
+.snippet-shortcut-section > div:first-child { margin-bottom: 9px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.snippet-shortcut-section h3 { margin: 0; font-size: 14px; }
+.snippet-shortcut-section > div:first-child p { margin: 0; color: var(--muted-text); font-size: 11px; }
+.snippet-shortcut-grid { display: grid; gap: 8px; }
+.snippet-shortcut-card { min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.snippet-shortcut-card > span { display: inline-block; max-width: 100%; overflow: hidden; padding: 2px 6px; border-radius: 9px; background: var(--surface-2); color: var(--muted-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.snippet-shortcut-card strong { display: block; margin-top: 7px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.snippet-shortcut-card > p { height: 34px; margin: 4px 0 8px; overflow: hidden; color: var(--muted-text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.snippet-shortcut-card > div { display: flex; gap: 5px; }
+.snippet-shortcut-card .button { min-height: 27px; padding-inline: 8px; font-size: 11px; }
+.snippet-category-create .button { flex: 0 0 auto; }
+.snippet-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.snippet-category-card { min-height: 94px; padding: 17px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--brand); text-align: left; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.snippet-category-card:hover, .snippet-category-card:focus-visible { border-color: color-mix(in srgb, var(--brand) 38%, var(--line)); background: var(--surface-2); outline: 0; transform: translateY(-1px); }
+.snippet-category-card > span { min-width: 0; color: var(--text); }
+.snippet-category-card strong, .snippet-category-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snippet-category-card strong { font-size: 13px; }
+.snippet-category-card small { margin-top: 4px; color: var(--muted-text); font-size: 11px; }
+.snippet-back-link { margin-bottom: 7px; }
+.snippet-quick-composer { margin-bottom: 16px; padding: 13px; border: 1px solid color-mix(in srgb, var(--brand) 22%, var(--line)); border-radius: 13px; background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.snippet-quick-composer textarea { min-height: 88px; border-color: transparent; background: var(--surface); font-size: 12px; }
+.snippet-quick-composer > div { margin-top: 9px; display: flex; gap: 9px; }
+.snippet-quick-composer .button { flex: 0 0 auto; }
 .snippet-card, .launcher-card { padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
-.snippet-card > div:first-child { display: flex; align-items: center; justify-content: space-between; }
-.snippet-card > div:first-child > span { padding: 4px 8px; border-radius: 12px; background: var(--surface-2); color: var(--muted-text); font-size: 11px; }
-.snippet-card h3 { margin: 12px 0 8px; font-size: 14px; }
-.snippet-card pre { height: 108px; margin: 0 0 14px; padding: 11px; overflow: auto; border-radius: 9px; background: var(--surface-2); color: var(--muted-text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.snippet-card { display: flex; flex-direction: column; gap: 10px; }
+.snippet-card.highlighted { border-color: color-mix(in srgb, var(--brand) 48%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.snippet-card-header { display: flex; align-items: center; gap: 8px; }
+.snippet-card-header > div { flex: 1; min-width: 0; }
+.snippet-card-header [data-slot='input'] { height: 28px; border: 0; background: var(--surface-2); color: var(--muted-text); font-size: 12px; }
+.snippet-title-input { height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 14px; font-weight: 600; }
+.snippet-content-input { height: 108px; resize: vertical; padding: 11px; border: 0; border-radius: 9px; background: var(--surface-2); color: var(--muted-text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.55; }
 .launcher-card { display: flex; flex-direction: column; }
 .launcher-open { width: 100%; padding: 0; display: flex; align-items: center; gap: 11px; border: 0; background: transparent; text-align: left; }
 .site-favicon { width: 39px; height: 39px; flex: 0 0 39px; display: grid; place-items: center; border-radius: 11px; background: var(--accent-soft); color: var(--brand); font-size: 14px; font-weight: 700; }
@@ -754,7 +783,16 @@ input, textarea, select { color: var(--text); }
 
 /* Music */
 .music-page { padding-bottom: 135px; }
-.music-hero { min-height: 145px; margin-bottom: 22px; padding: 22px 27px; display: flex; align-items: center; gap: 22px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--line)); border-radius: 17px; background: linear-gradient(115deg, var(--accent-soft), var(--surface)); }
+.music-hero { --music-hero-cover: none; position: relative; isolation: isolate; min-height: 145px; margin-bottom: 22px; padding: 22px 27px; display: flex; align-items: center; gap: 22px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--line)); border-radius: 17px; background: linear-gradient(115deg, var(--accent-soft), var(--surface)); }
+.music-hero::before, .music-hero::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
+.music-hero::before { z-index: -2; inset: -16px; background-image: var(--music-hero-cover); background-position: center; background-size: cover; filter: blur(14px) saturate(.82); transform: scale(1.08); }
+.music-hero::after { z-index: -1; background: linear-gradient(115deg, rgba(17, 18, 22, .67), rgba(28, 29, 34, .36)), radial-gradient(circle, rgba(255, 255, 255, .15) 0 .6px, transparent .8px); background-size: auto, 4px 4px; backdrop-filter: blur(3px); }
+.music-hero.is-playing { border-color: rgba(255, 255, 255, .3); color: #fff; }
+.music-hero.is-playing::before, .music-hero.is-playing::after { opacity: 1; }
+.music-hero > * { position: relative; z-index: 0; }
+.music-hero.is-playing .hero-art { border: 1px solid rgba(255, 255, 255, .22); }
+.music-hero.is-playing .hero-copy > span { color: rgba(255, 255, 255, .72); }
+.music-hero.is-playing .hero-copy p { color: rgba(255, 255, 255, .78); }
 .hero-art { width: 96px; height: 96px; flex: 0 0 96px; overflow: hidden; border-radius: 14px; display: grid; place-items: center; background: var(--surface); color: var(--brand); box-shadow: 0 8px 24px rgba(44, 37, 50, .13); }
 .hero-art img { width: 100%; height: 100%; object-fit: cover; }
 .hero-copy { min-width: 0; }
@@ -1165,6 +1203,9 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
   .collection-tags { padding-inline: 7px; }
   .collection-tags span { max-width: 72px; }
   .search-box { width: 100%; }
+  .snippet-home-sections { grid-template-columns: 1fr; gap: 16px; }
+  .snippet-category-create, .snippet-quick-composer > div { align-items: stretch; flex-direction: column; }
+  .snippet-category-create .button, .snippet-quick-composer .button { width: 100%; }
   .music-library-toolbar { height: auto; align-items: stretch; flex-direction: column; }
   .music-library-toolbar .search-box { min-width: 100%; }
   .music-album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 10px; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Album, Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import type { MusicAlbum, MusicMetadataUpdate, MusicTrack } from '../shared/types'
@@ -166,7 +166,10 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
 
   return <section className="page music-page">
     <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={17} />添加音乐</Button></header>
-    <div className="music-hero">
+    <div
+      className={`music-hero ${playing && currentCover ? 'is-playing' : ''}`}
+      style={{ '--music-hero-cover': currentCover ? `url(${currentCover})` : 'none' } as CSSProperties}
+    >
       <div className="hero-art">{currentCover ? <img src={currentCover} alt="" /> : <Disc3 size={48} strokeWidth={1.2} />}</div>
       <div className="hero-copy"><span>正在播放</span><h2>{current?.title || '还没有选择音乐'}</h2><p>{current ? `${current.artist} · ${current.album}` : '从资料库中选择一首，给此刻一点声音。'}</p></div>
       {current && audioUrl ? <AudioWaveform media={audio.current} src={audioUrl} /> : <div className="audio-waveform-placeholder" aria-hidden><span /></div>}
@@ -195,7 +198,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
         <div className="progress-control"><span>{formatDuration(position)}</span><Slider min={0} max={Math.max(duration, 1)} step={1} value={[Math.min(position, duration || 0)]} onValueChange={([value]) => { if (audio.current) audio.current.currentTime = value }} aria-label="播放进度" /><span>{formatDuration(duration)}</span></div></div>
       <div className="volume-control">{volume < 0.05 ? <Volume1 size={17} /> : <Volume2 size={17} />}<Slider min={0} max={1} step={0.01} value={[volume]} onValueChange={([value]) => setVolume(value)} aria-label="音量" /></div>
     </div>
-    {editTarget && <MusicMetadataSheet track={editTarget} onClose={() => setEditTarget(null)} onSave={saveMetadata} />}
+    {editTarget && <MusicMetadataSheet track={editTarget} albums={albums} onClose={() => setEditTarget(null)} onSave={saveMetadata} />}
     {albumTarget && <MusicAlbumSheet album={albumTarget} tracks={tracks.filter((track) => track.albumId === albumTarget.id)} onClose={() => setAlbumTarget(null)} onSave={(cover) => saveAlbumCover(albumTarget.id, cover)} onPlay={(track) => { void playTrack(track, albumTarget.id); setAlbumTarget(null) }} />}
     <MusicImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={addImportedTracks} />
     <ConfirmDialog open={Boolean(removeTarget)} onOpenChange={(open) => { if (!open) setRemoveTarget(null) }} title="从资料库移除？" description={removeTarget ? `将移除《${removeTarget.title}》的索引，原始音乐文件不会被删除。` : ''} confirmLabel="移除索引" destructive icon={<Trash2 />} onConfirm={() => { if (removeTarget) remove(removeTarget); setRemoveTarget(null) }} />
