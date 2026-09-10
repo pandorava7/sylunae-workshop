@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { createDefaultSnapshot } from '../shared/defaults'
-import type { AppSnapshot } from '../shared/types'
+import type { AppSnapshot, HomeQuickActionId } from '../shared/types'
 import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
 import { normalizeImageLibrary } from '../images/library'
@@ -53,11 +53,18 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const legacyTool = snapshot.settings?.lastTool as string | undefined
   const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
   const lastTool = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
+  const homeWallpapers = snapshot.settings?.homeWallpapers?.length
+    ? snapshot.settings.homeWallpapers.slice(0, 5)
+    : snapshot.settings?.homeWallpaper
+      ? [{ id: 'legacy-home-wallpaper', image: snapshot.settings.homeWallpaper, title: '换一张喜欢的壁纸', description: '让每一次打开，都有好心情。' }]
+      : []
+  const validHomeQuickActions: HomeQuickActionId[] = ['new-note', 'new-todo', 'pomodoro', 'music', 'collection']
+  const homeQuickActions = snapshot.settings?.homeQuickActions?.filter((id, index, items) => validHomeQuickActions.includes(id) && items.indexOf(id) === index)
   return {
     ...defaults,
     ...snapshot,
     version: 1,
-    settings: { ...defaults.settings, ...snapshot.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
+    settings: { ...defaults.settings, ...snapshot.settings, homeWallpapers, homeQuickActions: homeQuickActions?.length ? homeQuickActions : defaults.settings.homeQuickActions, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: migrateDefaultThemePalettes(snapshot.settings?.themePalettes) },
     tracks: music.tracks,
     albums: music.albums,
     folders: snapshot.folders ?? [],

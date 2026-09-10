@@ -8,6 +8,7 @@ const jsonContentSchema: z.ZodType<Record<string, unknown>> = z.lazy(() => z.obj
 const weatherLocationSchema = z.object({ name: z.string(), country: z.string(), admin1: z.string(), latitude: z.number(), longitude: z.number(), timezone: z.string() })
 const defaultWeatherLocation = { name: '吉隆坡', country: '马来西亚', admin1: '', latitude: 3.139, longitude: 101.6869, timezone: 'Asia/Kuala_Lumpur' }
 const weatherSnapshotSchema = z.object({ location: weatherLocationSchema, temperature: z.number(), apparent: z.number(), code: z.number(), daily: z.array(z.object({ minimum: z.number(), maximum: z.number(), code: z.number() })), fetchedAt: timestamp })
+const homeWallpaperSchema = z.object({ id: z.string(), image: z.string(), title: z.string(), description: z.string() })
 const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']),
   themePalettes: z.object({
@@ -16,8 +17,11 @@ const settingsSchema = z.object({
   }).optional(),
   lastTool: z.enum(['library', 'goals', 'home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
   sidebarCollapsed: z.boolean(),
+  displayName: z.string().optional().default('Pandora'),
   bangumiUsername: z.string(),
   homeWallpaper: z.string().optional().default(''),
+  homeWallpapers: z.array(homeWallpaperSchema).max(5).optional().default([]),
+  homeQuickActions: z.array(z.enum(['new-note', 'new-todo', 'pomodoro', 'music', 'collection'])).min(1).max(5).optional().default(['new-note', 'new-todo', 'pomodoro', 'music', 'collection']),
   weatherLocation: weatherLocationSchema.optional().default(defaultWeatherLocation),
   weatherCache: weatherSnapshotSchema.nullable().optional().default(null),
   recentTools: z.array(z.enum(['tasks', 'notes', 'music', 'collection', 'tools'])).optional().default([]),

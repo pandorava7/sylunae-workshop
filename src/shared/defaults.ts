@@ -10,8 +10,11 @@ export function createDefaultSnapshot(): AppSnapshot {
       themePalettes: normalizeThemePalettes(),
       lastTool: 'home',
       sidebarCollapsed: false,
+      displayName: 'Pandora',
       bangumiUsername: '',
       homeWallpaper: '',
+      homeWallpapers: [],
+      homeQuickActions: ['new-note', 'new-todo', 'pomodoro', 'music', 'collection'],
       weatherLocation: {
         name: '吉隆坡',
         country: '马来西亚',

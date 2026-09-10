@@ -1,10 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { BookHeart, Boxes, ChevronLeft, ChevronRight, Download, Home, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
+import { BookHeart, Boxes, ChevronLeft, ChevronRight, Download, Library, ListChecks, Menu, Music2, NotebookPen, Settings } from 'lucide-react'
 import type { MusicTrack, ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
 
 const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
-  { id: 'home', label: '主页', icon: Home },
   { id: 'tasks', label: '任务箱', icon: ListChecks },
   { id: 'notes', label: '笔记本', icon: NotebookPen },
   { id: 'music', label: '音乐库', icon: Music2 },

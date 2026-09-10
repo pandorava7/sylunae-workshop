@@ -3,6 +3,7 @@ import type { JSONContent } from '@tiptap/react'
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type WorkspaceToolId = 'tasks' | 'notes' | 'music' | 'collection' | 'tools'
 export type ToolId = 'home' | WorkspaceToolId | 'settings'
+export type HomeQuickActionId = 'new-note' | 'new-todo' | 'pomodoro' | 'music' | 'collection'
 
 export interface ThemePalette {
   bg: string
@@ -28,13 +29,23 @@ export interface ThemePalettes {
   dark: ThemePalette
 }
 
+export interface HomeWallpaper {
+  id: string
+  image: string
+  title: string
+  description: string
+}
+
 export interface AppSettings {
   theme: ThemeMode
   themePalettes: ThemePalettes
   lastTool: ToolId
   sidebarCollapsed: boolean
+  displayName: string
   bangumiUsername: string
   homeWallpaper: string
+  homeWallpapers: HomeWallpaper[]
+  homeQuickActions: HomeQuickActionId[]
   weatherLocation: WeatherLocation
   weatherCache: WeatherSnapshot | null
   recentTools: WorkspaceToolId[]

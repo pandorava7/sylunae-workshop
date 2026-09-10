@@ -119,16 +119,21 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   return <section ref={contentRef} className={`${embedded ? 'collection-content' : 'page'} library-page`}>
-    <div className="library-actions"><Button variant="outline" className="button secondary" onClick={() => void refresh()} disabled={syncing || clearingCoverCache}>
-      <RefreshCw size={15} className={syncing || clearingCoverCache ? 'spin' : undefined} />刷新
-    </Button></div>
-    <Tabs className="library-tabs" value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value) as BangumiSubjectType)}>
-      <TabsList variant="line" aria-label="收藏类型">
-        {visibleSubjectTypes.map((type) => <TabsTrigger key={type} value={String(type)}>
-          <span>{SUBJECT_LABELS[type]}</span><span className="library-tab-count">{subjectCounts.get(type) || 0}</span>
-        </TabsTrigger>)}
-      </TabsList>
-    </Tabs>
+    
+    <div className="library-tabs-container">
+      <Tabs className="library-tabs" value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value) as BangumiSubjectType)}>
+        <TabsList variant="line" aria-label="收藏类型">
+          {visibleSubjectTypes.map((type) => <TabsTrigger key={type} value={String(type)}>
+            <span>{SUBJECT_LABELS[type]}</span><span className="library-tab-count">{subjectCounts.get(type) || 0}</span>
+          </TabsTrigger>)}
+        </TabsList>
+      </Tabs>
+
+      <div className="library-actions"><Button variant="outline" className="button secondary" onClick={() => void refresh()} disabled={syncing || clearingCoverCache}>
+        <RefreshCw size={15} className={syncing || clearingCoverCache ? 'spin' : undefined} />刷新
+      </Button></div>
+    </div>
+    
 
     <div className="library-statuses" role="radiogroup" aria-label="收藏状态">
       {subjectCounts.get(subjectType) ? <Badge asChild variant={collectionType === 0 ? 'outline' : 'secondary'} className={collectionType === 0 ? 'active' : ''}>

@@ -1,22 +1,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { BookMarked, CheckSquare2, ChevronRight, Clipboard, Cloud, CloudLightning, CloudRain, CloudSun, FileText, ImagePlus, ListChecks, MapPin, Music2, NotebookPen, RotateCcw, Search, SlidersHorizontal, Snowflake, Sun, Target, Timer } from 'lucide-react'
+import { ArrowDown, ArrowUp, BookMarked, CheckSquare2, ChevronRight, Clipboard, Cloud, CloudLightning, CloudRain, CloudSun, FileText, ImagePlus, ListChecks, MapPin, Music2, NotebookPen, RotateCcw, Search, SlidersHorizontal, Snowflake, Sun, Target, Timer, Trash2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
-import type { ToolId, WeatherLocation, WeatherSnapshot } from '../shared/types'
+import type { HomeQuickActionId, HomeWallpaper, ToolId, WeatherLocation, WeatherSnapshot } from '../shared/types'
 import { Spinner } from '../components/Icons'
 import { Button } from '../components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Checkbox } from '../components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
 
 const defaultWallpaper = '/images/wallpaper.webp'
+const defaultWallpaperEntry: HomeWallpaper = { id: 'default', image: defaultWallpaper, title: '换一张喜欢的壁纸', description: '让每一次打开，都有好心情。' }
+const defaultWallpaperList = [defaultWallpaperEntry]
 const quotes = ['「 星光不问赶路人，时光自会给出答案。 」', '「 慢下来，和喜欢的一切在一起。 」', '「 在平凡的日子里，也要认真收藏光亮。 」', '「 允许一切慢慢发生，也相信每一步都有回响。 」', '「 新的一天无需完美，只要更靠近自己。 」']
 interface CitySearchResult extends WeatherLocation { id: number }
 type HomeIntent = 'new-note' | 'todos' | 'pomodoro' | 'clipboard'
+interface QuickAction { id: HomeQuickActionId; label: string; hint: string; icon: ReactNode; tool: ToolId; intent?: HomeIntent }
+const defaultQuickActionOrder: HomeQuickActionId[] = ['new-note', 'new-todo', 'pomodoro', 'music', 'collection']
 
 export function HomePage({ onOpenTool }: { onOpenTool: (tool: ToolId, intent?: HomeIntent) => void }) {
   const { snapshot, update } = useAppStore()
-  const wallpaperInput = useRef<HTMLInputElement>(null)
   const [now, setNow] = useState(() => new Date())
-  const [wallpaperError, setWallpaperError] = useState('')
+  const [nameDialogOpen, setNameDialogOpen] = useState(false)
+  const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
   const quote = useMemo(() => quotes[Math.floor(Math.random() * quotes.length)], [])
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(timer) }, [])
   if (!snapshot) return null
@@ -31,24 +37,14 @@ export function HomePage({ onOpenTool }: { onOpenTool: (tool: ToolId, intent?: H
   const latestNote = [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
   const usage = snapshot.settings.toolUsage
 
-  const changeWallpaper = (file?: File) => {
-    setWallpaperError('')
-    if (!file) return
-    if (!file.type.startsWith('image/')) { setWallpaperError('请选择图片文件'); return }
-    if (file.size > 12 * 1024 * 1024) { setWallpaperError('壁纸文件请勿超过 12 MB'); return }
-    const reader = new FileReader()
-    reader.onload = () => update((state) => ({ ...state, settings: { ...state.settings, homeWallpaper: String(reader.result), updatedAt: new Date().toISOString() } }))
-    reader.onerror = () => setWallpaperError('无法读取这张图片')
-    reader.readAsDataURL(file)
-  }
-
-  const quickActions: Array<{ label: string; hint: string; icon: ReactNode; tool: ToolId; intent?: HomeIntent }> = [
-    { label: '新建笔记', hint: '记录此刻的想法', icon: <FileText />, tool: 'notes', intent: 'new-note' },
-    { label: '添加待办', hint: '让事情井井有条', icon: <CheckSquare2 />, tool: 'tasks', intent: 'todos' },
-    { label: '开始专注', hint: '保持高效与专注', icon: <Timer />, tool: 'tasks', intent: 'pomodoro' },
-    { label: '继续播放', hint: snapshot.tracks.length ? `${snapshot.tracks.length} 首音乐已就绪` : '打开你的音乐', icon: <Music2 />, tool: 'music' },
-    { label: '打开收藏', hint: '回到喜欢的内容', icon: <BookMarked />, tool: 'collection' },
+  const allQuickActions: QuickAction[] = [
+    { id: 'new-note', label: '新建笔记', hint: '记录此刻的想法', icon: <FileText />, tool: 'notes', intent: 'new-note' },
+    { id: 'new-todo', label: '添加待办', hint: '让事情井井有条', icon: <CheckSquare2 />, tool: 'tasks', intent: 'todos' },
+    { id: 'pomodoro', label: '开始专注', hint: '保持高效与专注', icon: <Timer />, tool: 'tasks', intent: 'pomodoro' },
+    { id: 'music', label: '继续播放', hint: snapshot.tracks.length ? `${snapshot.tracks.length} 首音乐已就绪` : '打开你的音乐', icon: <Music2 />, tool: 'music' },
+    { id: 'collection', label: '打开收藏', hint: '回到喜欢的内容', icon: <BookMarked />, tool: 'collection' },
   ]
+  const quickActions = snapshot.settings.homeQuickActions.map((id) => allQuickActions.find((action) => action.id === id)).filter((action): action is QuickAction => Boolean(action))
   const recent = [
     { label: '目标追踪', time: usage.tasks, icon: <Target />, tool: 'tasks' as ToolId },
     { label: '快速待办', time: usage.tasks, icon: <ListChecks />, tool: 'tasks' as ToolId, intent: 'todos' as HomeIntent },
@@ -59,11 +55,178 @@ export function HomePage({ onOpenTool }: { onOpenTool: (tool: ToolId, intent?: H
   ].sort((a, b) => (b.time || '').localeCompare(a.time || ''))
 
   return <section className="home-page"><div className="home-layout">
-    <header className="home-heading home-enter enter-1"><div><span>{period}</span><h1>{greeting}，Pandora</h1><p>无论今天过得如何，愿你在这里，找到一片属于自己的宁静。</p><blockquote>{quote}</blockquote></div><div className="home-date"><strong>{dateText}</strong><span>在平凡的日子里，做不平凡的自己。</span></div></header>
-    <div className="home-feature-row home-enter enter-2"><WeatherCard /><section className="wallpaper-card" style={{ backgroundImage: `url("${snapshot.settings.homeWallpaper || defaultWallpaper}")` }}><div className="wallpaper-dots" aria-hidden><i /><i /><i /><i /><i /></div><div className="wallpaper-copy"><strong>换一张喜欢的壁纸</strong><span>让每一次打开，都有好心情。</span><div><input ref={wallpaperInput} type="file" accept="image/*" hidden onChange={(event) => changeWallpaper(event.target.files?.[0])} /><Button onClick={() => wallpaperInput.current?.click()}><ImagePlus size={15} />更换壁纸</Button>{snapshot.settings.homeWallpaper && <Button size="icon" onClick={() => update((state) => ({ ...state, settings: { ...state.settings, homeWallpaper: '', updatedAt: new Date().toISOString() } }))} aria-label="恢复默认壁纸"><RotateCcw size={15} /></Button>}</div></div>{wallpaperError && <span className="wallpaper-error">{wallpaperError}</span>}</section></div>
-    <section className="home-quick home-enter enter-3"><div className="home-section-title"><div><h2>快速开始</h2><p>从这里，快速进入你常用的功能</p></div><span><SlidersHorizontal size={15} />自定义卡片</span></div><div className="quick-grid">{quickActions.map((action) => <button key={action.label} onClick={() => onOpenTool(action.tool, action.intent)}><span>{action.icon}</span><div><strong>{action.label}</strong><small>{action.hint}</small></div><ChevronRight size={15} /></button>)}</div></section>
-    <div className="home-lower home-enter enter-4"><section className="home-recent"><div className="home-section-title"><div><h2>近期使用</h2><p>你最近使用过的功能，会显示在这里</p></div></div><div className="recent-grid">{recent.map((item) => <button key={item.label} onClick={() => onOpenTool(item.tool, item.intent)}><span>{item.icon}</span><div><strong>{item.label}</strong><small>{formatRelativeTime(item.time)}</small></div><ChevronRight size={14} /></button>)}</div></section><section className="home-overview"><div className="home-section-title"><div><h2>今日概览</h2><p>关于你今天的专注与成长</p></div><span>{new Intl.DateTimeFormat('zh-CN').format(now)}⌄</span></div><div className="overview-grid"><OverviewCard icon={<CheckSquare2 />} label="今日待办" value={openTodos.length} hint={`已完成 ${snapshot.todos.filter((todo) => todo.completed).length} 项`} /><OverviewCard icon={<Target />} label="进行中的目标" value={activeGoals.length} hint="保持专注 ✣" /><OverviewCard icon={<FileText />} label="最近笔记" value={notes.length} hint={latestNote ? latestNote.title : '等待记录'} /><OverviewCard icon={<Timer />} label="累计专注时长" value={formatFocusTime(snapshot.pomodoro.completedSessions * snapshot.pomodoro.focusMinutes)} hint={`${snapshot.pomodoro.completedSessions} 个番茄钟`} /></div><div className="overview-quote">♧　「 慢下来，和喜欢的一切在一起。 」</div></section></div>
-  </div></section>
+    <header className="home-heading home-enter enter-1"><div><span>{period}</span><h1>{greeting}，<button type="button" className="display-name-trigger" onClick={() => setNameDialogOpen(true)} title="修改名字">{snapshot.settings.displayName}</button></h1><p>无论今天过得如何，愿你在这里，找到一片属于自己的宁静。</p><blockquote>{quote}</blockquote></div><div className="home-date"><strong>{dateText}</strong><span>在平凡的日子里，做不平凡的自己。</span></div></header>
+    <div className="home-feature-row home-enter enter-2"><WeatherCard /><WallpaperCarousel wallpapers={snapshot.settings.homeWallpapers} onSave={(homeWallpapers) => update((state) => ({ ...state, settings: { ...state.settings, homeWallpaper: '', homeWallpapers, updatedAt: new Date().toISOString() } }))} /></div>
+    <section className="home-quick home-enter enter-3"><div className="home-section-title"><div><h2>快速开始</h2></div><button type="button" onClick={() => setQuickActionsDialogOpen(true)}><SlidersHorizontal size={15} />自定义卡片</button></div><div className="quick-grid">{quickActions.map((action) => <button key={action.id} onClick={() => onOpenTool(action.tool, action.intent)}><span>{action.icon}</span><div><strong>{action.label}</strong><small>{action.hint}</small></div><ChevronRight size={15} /></button>)}</div></section>
+    <div className="home-lower home-enter enter-4"><section className="home-recent"><div className="home-section-title"><div><h2>近期使用</h2></div></div><div className="recent-grid">{recent.map((item) => <button key={item.label} onClick={() => onOpenTool(item.tool, item.intent)}><span>{item.icon}</span><div><strong>{item.label}</strong><small>{formatRelativeTime(item.time)}</small></div><ChevronRight size={14} /></button>)}</div></section><section className="home-overview"><div className="home-section-title"><div><h2>今日概览</h2></div><span>{new Intl.DateTimeFormat('zh-CN').format(now)}</span></div><div className="overview-grid"><OverviewCard icon={<CheckSquare2 />} label="今日待办" value={openTodos.length} hint={`已完成 ${snapshot.todos.filter((todo) => todo.completed).length} 项`} /><OverviewCard icon={<Target />} label="进行中的目标" value={activeGoals.length} hint="保持专注 ✣" /><OverviewCard icon={<FileText />} label="最近笔记" value={notes.length} hint={latestNote ? latestNote.title : '等待记录'} /><OverviewCard icon={<Timer />} label="累计专注时长" value={formatFocusTime(snapshot.pomodoro.completedSessions * snapshot.pomodoro.focusMinutes)} hint={`${snapshot.pomodoro.completedSessions} 个番茄钟`} /></div><div className="overview-quote">♧　「 慢下来，和喜欢的一切在一起。 」</div></section></div>
+  </div><DisplayNameDialog open={nameDialogOpen} name={snapshot.settings.displayName} onOpenChange={setNameDialogOpen} onSave={(displayName) => update((state) => ({ ...state, settings: { ...state.settings, displayName, updatedAt: new Date().toISOString() } }))} /><QuickActionsDialog open={quickActionsDialogOpen} actions={allQuickActions} selectedIds={snapshot.settings.homeQuickActions} onOpenChange={setQuickActionsDialogOpen} onSave={(homeQuickActions) => update((state) => ({ ...state, settings: { ...state.settings, homeQuickActions, updatedAt: new Date().toISOString() } }))} /></section>
+}
+
+function QuickActionsDialog({ open, actions, selectedIds, onOpenChange, onSave }: { open: boolean; actions: QuickAction[]; selectedIds: HomeQuickActionId[]; onOpenChange: (open: boolean) => void; onSave: (ids: HomeQuickActionId[]) => void }) {
+  const [draftOrder, setDraftOrder] = useState<HomeQuickActionId[]>(defaultQuickActionOrder)
+  const [visibleIds, setVisibleIds] = useState<Set<HomeQuickActionId>>(new Set(selectedIds))
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setDraftOrder([...selectedIds, ...defaultQuickActionOrder.filter((id) => !selectedIds.includes(id))])
+    setVisibleIds(new Set(selectedIds))
+    setError('')
+  }, [open, selectedIds])
+
+  const move = (index: number, direction: -1 | 1) => setDraftOrder((current) => {
+    const target = index + direction
+    if (target < 0 || target >= current.length) return current
+    const next = [...current]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    return next
+  })
+  const toggle = (id: HomeQuickActionId, checked: boolean) => {
+    setVisibleIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+    setError('')
+  }
+  const save = () => {
+    const selected = draftOrder.filter((id) => visibleIds.has(id))
+    if (!selected.length) { setError('请至少保留一张快捷卡片'); return }
+    onSave(selected)
+    onOpenChange(false)
+  }
+
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent size="md" className="quick-actions-dialog"><DialogHeader><DialogTitle>自定义快捷卡片</DialogTitle><DialogDescription>选择主页要显示的入口，并调整它们的排列顺序。</DialogDescription></DialogHeader><div className="quick-actions-editor">{draftOrder.map((id, index) => { const action = actions.find((item) => item.id === id); if (!action) return null; const checked = visibleIds.has(id); return <div key={id} className={checked ? '' : 'disabled'}><Checkbox id={`quick-action-${id}`} checked={checked} onCheckedChange={(value) => toggle(id, value === true)} /><label htmlFor={`quick-action-${id}`}><span>{action.icon}</span><span><strong>{action.label}</strong><small>{action.hint}</small></span></label><div className="quick-action-order"><Button type="button" variant="ghost" size="icon-sm" disabled={index === 0} onClick={() => move(index, -1)} aria-label={`上移${action.label}`}><ArrowUp /></Button><Button type="button" variant="ghost" size="icon-sm" disabled={index === draftOrder.length - 1} onClick={() => move(index, 1)} aria-label={`下移${action.label}`}><ArrowDown /></Button></div></div> })}</div>{error && <p className="quick-actions-error">{error}</p>}<DialogFooter className="quick-actions-footer"><Button type="button" variant="ghost" className="quick-actions-reset" onClick={() => { setDraftOrder(defaultQuickActionOrder); setVisibleIds(new Set(defaultQuickActionOrder)); setError('') }}><RotateCcw />恢复默认</Button><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button type="button" onClick={save}>保存</Button></DialogFooter></DialogContent></Dialog>
+}
+
+function DisplayNameDialog({ open, name, onOpenChange, onSave }: { open: boolean; name: string; onOpenChange: (open: boolean) => void; onSave: (name: string) => void }) {
+  const [draft, setDraft] = useState(name)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setDraft(name)
+    setError('')
+  }, [open, name])
+
+  const save = () => {
+    const displayName = draft.trim()
+    if (!displayName) { setError('名字不能为空'); return }
+    onSave(displayName)
+    onOpenChange(false)
+  }
+
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent size="sm"><DialogHeader><DialogTitle>修改名字</DialogTitle><DialogDescription>这个名字会显示在主页的问候语中。</DialogDescription></DialogHeader><form onSubmit={(event) => { event.preventDefault(); save() }}><label className="display-name-field">名字<Input autoFocus value={draft} maxLength={32} onChange={(event) => setDraft(event.target.value)} placeholder="输入你的名字" /></label>{error && <p className="display-name-error">{error}</p>}<DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button type="submit">保存</Button></DialogFooter></form></DialogContent></Dialog>
+}
+
+function WallpaperCarousel({ wallpapers: customWallpapers, onSave }: { wallpapers: HomeWallpaper[]; onSave: (wallpapers: HomeWallpaper[]) => void }) {
+  const wallpapers = customWallpapers.length ? customWallpapers : defaultWallpaperList
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [outgoing, setOutgoing] = useState<HomeWallpaper | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    if (activeIndex < wallpapers.length) return
+    setActiveIndex(0)
+    setOutgoing(null)
+  }, [activeIndex, wallpapers.length])
+
+  useEffect(() => {
+    if (wallpapers.length < 2 || settingsOpen) return
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => {
+        setOutgoing(wallpapers[current])
+        return (current + 1) % wallpapers.length
+      })
+    }, 7_000)
+    return () => clearInterval(timer)
+  }, [settingsOpen, wallpapers])
+
+  const active = wallpapers[activeIndex] ?? wallpapers[0]
+  const slideNumber = String(activeIndex + 1).padStart(2, '0')
+  const slideCount = String(wallpapers.length).padStart(2, '0')
+  return <>
+    <button type="button" className="wallpaper-card" onClick={() => setSettingsOpen(true)} aria-label="打开壁纸设置">
+      <span key={active.id} className={`wallpaper-layer ${outgoing ? 'wallpaper-layer-incoming' : ''}`} style={{ backgroundImage: `url(${JSON.stringify(active.image)})` }} />
+      {outgoing && <span key={outgoing.id} className="wallpaper-layer wallpaper-layer-outgoing" style={{ backgroundImage: `url(${JSON.stringify(outgoing.image)})` }} onAnimationEnd={() => setOutgoing(null)} />}
+      {outgoing && <span key={`glint-${active.id}`} className="wallpaper-glint" />}
+      <span className="wallpaper-shade" />
+      <div key={`progress-${active.id}-${settingsOpen}`} className="wallpaper-progress" aria-hidden>{wallpapers.map((wallpaper, index) => <i key={wallpaper.id} className={index === activeIndex ? 'active' : ''} />)}</div>
+      <div key={`active-copy-${active.id}`} className={`wallpaper-copy ${outgoing ? 'wallpaper-copy-incoming' : ''}`}><strong>{active.title}</strong><span>{active.description}</span></div>
+      {outgoing && <div key={`copy-${outgoing.id}`} className="wallpaper-copy wallpaper-copy-outgoing"><strong>{outgoing.title}</strong><span>{outgoing.description}</span></div>}
+    </button>
+    <WallpaperSettingsDialog open={settingsOpen} wallpapers={customWallpapers} onOpenChange={setSettingsOpen} onSave={onSave} />
+  </>
+}
+
+function WallpaperSettingsDialog({ open, wallpapers, onOpenChange, onSave }: { open: boolean; wallpapers: HomeWallpaper[]; onOpenChange: (open: boolean) => void; onSave: (wallpapers: HomeWallpaper[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState<HomeWallpaper[]>(wallpapers)
+  const [selectedId, setSelectedId] = useState<string | null>(wallpapers[0]?.id ?? null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setDraft(wallpapers.map((wallpaper) => ({ ...wallpaper })))
+    setSelectedId(wallpapers[0]?.id ?? null)
+    setError('')
+  }, [open, wallpapers])
+
+  const selected = draft.find((wallpaper) => wallpaper.id === selectedId) ?? null
+  const addWallpapers = async (files: FileList | null) => {
+    setError('')
+    if (!files?.length) return
+    const remaining = 5 - draft.length
+    if (remaining <= 0) { setError('最多只能设置 5 张壁纸'); return }
+    const candidates = Array.from(files).slice(0, remaining)
+    const invalid = candidates.find((file) => !file.type.startsWith('image/') || file.size > 12 * 1024 * 1024)
+    if (invalid) { setError(!invalid.type.startsWith('image/') ? '请选择图片文件' : '每张壁纸请勿超过 12 MB'); return }
+    try {
+      const additions = await Promise.all(candidates.map(async (file) => ({
+        id: crypto.randomUUID(),
+        image: await readImage(file),
+        title: defaultWallpaperEntry.title,
+        description: defaultWallpaperEntry.description,
+      })))
+      setDraft((current) => [...current, ...additions].slice(0, 5))
+      setSelectedId(additions[0]?.id ?? null)
+      if (files.length > remaining) setError(`已添加前 ${remaining} 张，壁纸最多 5 张`)
+    } catch { setError('无法读取选中的图片') }
+  }
+  const updateSelected = (changes: Partial<Pick<HomeWallpaper, 'title' | 'description'>>) => setDraft((current) => current.map((wallpaper) => wallpaper.id === selectedId ? { ...wallpaper, ...changes } : wallpaper))
+  const removeWallpaper = (id: string) => setDraft((current) => {
+    const next = current.filter((wallpaper) => wallpaper.id !== id)
+    if (selectedId === id) setSelectedId(next[0]?.id ?? null)
+    return next
+  })
+
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent size="lg" className="wallpaper-settings-dialog"><DialogHeader><DialogTitle>壁纸设置</DialogTitle><DialogDescription>添加最多 5 张壁纸并为每张图片设置独立文案。保存后会自动轮播；清空列表时使用默认壁纸。</DialogDescription></DialogHeader>
+    <div className="wallpaper-settings-body">
+      <div className="wallpaper-settings-list">
+        <div className="wallpaper-settings-list-head"><strong>我的壁纸</strong><span>{draft.length} / 5</span></div>
+        <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { void addWallpapers(event.target.files); event.currentTarget.value = '' }} />
+        <Button type="button" variant="outline" className="wallpaper-add" disabled={draft.length >= 5} onClick={() => inputRef.current?.click()}><ImagePlus size={16} />添加壁纸</Button>
+        <div className="wallpaper-settings-items">{draft.map((wallpaper, index) => <div key={wallpaper.id} className={`wallpaper-settings-item ${wallpaper.id === selectedId ? 'active' : ''}`}>
+          <button type="button" onClick={() => setSelectedId(wallpaper.id)}><span style={{ backgroundImage: `url(${JSON.stringify(wallpaper.image)})` }} /><strong>壁纸 {index + 1}</strong></button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除壁纸 ${index + 1}`} onClick={() => removeWallpaper(wallpaper.id)}><Trash2 size={15} /></Button>
+        </div>)}</div>
+        {!draft.length && <div className="wallpaper-settings-empty"><ImagePlus size={24} /><span>还没有自定义壁纸</span><small>主页将继续显示默认壁纸</small></div>}
+      </div>
+      <div className="wallpaper-copy-editor">{selected ? <><div className="wallpaper-editor-preview" style={{ backgroundImage: `url(${JSON.stringify(selected.image)})` }}><div><strong>{selected.title}</strong><span>{selected.description}</span></div></div><label>主文案<Input value={selected.title} maxLength={40} onChange={(event) => updateSelected({ title: event.target.value })} placeholder="输入主文案" /></label><label>副文案<Textarea value={selected.description} maxLength={80} rows={3} onChange={(event) => updateSelected({ description: event.target.value })} placeholder="输入副文案" /></label></> : <div className="wallpaper-editor-empty"><strong>添加一张壁纸开始设置</strong><span>选中壁纸后，可在这里编辑它的专属文案。</span></div>}</div>
+    </div>
+    {error && <p className="wallpaper-settings-error">{error}</p>}
+    <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button onClick={() => { onSave(draft.map((wallpaper) => ({ ...wallpaper, title: wallpaper.title.trim(), description: wallpaper.description.trim() }))); onOpenChange(false) }}>保存设置</Button></DialogFooter>
+  </DialogContent></Dialog>
+}
+
+function readImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }
 
 function WeatherCard() {
