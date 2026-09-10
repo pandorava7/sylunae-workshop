@@ -38,6 +38,7 @@ import {
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { usePersistentState } from "../lib/usePersistentState";
 
 type ToolView = "home" | "clipboard" | "launcher" | "image";
 
@@ -70,8 +71,11 @@ export function ToolsPage({
 }: {
   initialView?: ToolView;
 }) {
-  const [view, setView] = useState<ToolView>(initialView);
+  const [view, setView] = usePersistentState<ToolView>("navigation.toolsView", initialView);
   const pageRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (initialView !== "home") setView(initialView);
+  }, [initialView, setView]);
   useEffect(() => {
     pageRef.current?.scrollTo({ top: 0 });
   }, [view]);
@@ -556,7 +560,7 @@ function LauncherTool() {
   const links = snapshot?.launcherLinks ?? [];
   const [creating, setCreating] = useState(false);
   const [editingLink, setEditingLink] = useState<LauncherLink | null>(null);
-  const [view, setView] = useState<"active" | "archived">("active");
+  const [view, setView] = usePersistentState<"active" | "archived">("navigation.launcherView", "active");
   const activeLinks = links.filter((link) => !link.archived);
   const archivedLinks = links.filter((link) => link.archived);
   const visibleLinks = view === "active" ? activeLinks : archivedLinks;

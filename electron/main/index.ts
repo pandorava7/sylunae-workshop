@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, shell } from 'electron'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { open, readdir, stat } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -44,6 +44,7 @@ protocol.registerSchemesAsPrivileged([
 function isIndexedPath(filePath: string): boolean {
   const snapshot = loadSnapshot()
   return sessionMediaPaths.has(filePath)
+    || snapshot.settings.pomodoroAlarmPath === filePath
     || snapshot.tracks.some((track) => track.path === filePath)
     || snapshot.imageLibrary?.assets.some((asset) => asset.path === filePath)
 }
@@ -890,6 +891,30 @@ function registerIpc(): void {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
   ipcMain.handle('system:find-favicon', (_event, url: string) => findFavicon(url))
+  ipcMain.handle('system:pick-pomodoro-alarm', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择番茄钟提示音',
+      properties: ['openFile'],
+      filters: [{ name: '音频文件', extensions: [...AUDIO_EXTENSIONS].map((value) => value.slice(1)) }],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    const filePath = resolve(result.filePaths[0])
+    sessionMediaPaths.add(filePath)
+    return filePath
+  })
+  ipcMain.handle('system:get-pomodoro-alarm-url', (_event, filePath: string) => {
+    const extension = extname(filePath).toLowerCase()
+    if (!isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extension)) return null
+    return `sylunae-media://audio/${Buffer.from(filePath).toString('base64url')}`
+  })
+  ipcMain.handle('system:notify-pomodoro-complete', (_event, focusCompleted: boolean) => {
+    if (!Notification.isSupported()) return
+    new Notification({
+      title: '丝月工坊',
+      body: focusCompleted ? '本轮专注完成，休息一下吧。' : '休息结束，准备开始下一轮专注。',
+      silent: true,
+    }).show()
+  })
 }
 
 app.whenReady().then(() => {

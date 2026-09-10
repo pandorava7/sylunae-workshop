@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CalendarPlus, CheckSquare2, ChevronRight, FolderInput, FolderOpen, HardDrive, Image as ImageIcon, Images, LocateFixed, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
+import { usePersistentState } from '../lib/usePersistentState'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
@@ -45,7 +46,7 @@ export function ImageGalleryPage() {
   const { snapshot, update } = useAppStore()
   const library = snapshot?.imageLibrary ?? { roots: [], collections: [], assets: [] }
   const [selectedCollection, setSelectedCollection] = useState('all')
-  const [filter, setFilter] = useState<GalleryFilter>('all')
+  const [filter, setFilter] = usePersistentState<GalleryFilter>('navigation.galleryFilter', 'all')
   const [sort, setSort] = useState<GallerySort>('recent')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)

@@ -11,6 +11,7 @@ import { EmptyState, Spinner } from '../components/Icons'
 import { ContentPagination } from '../components/ContentPagination'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { usePersistentState } from '../lib/usePersistentState'
 
 const PAGE_SIZE = 12
 const SUBJECT_TYPES = [2, 3, 4, 6, 1] as const satisfies readonly BangumiSubjectType[]
@@ -19,8 +20,8 @@ const COLLECTION_TYPES = [1, 2, 3, 4, 5] as const satisfies readonly BangumiColl
 export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
   const contentRef = useRef<HTMLElement>(null)
   const { snapshot } = useAppStore()
-  const [subjectType, setSubjectType] = useState<BangumiSubjectType>(2)
-  const [collectionType, setCollectionType] = useState<BangumiCollectionType | 0>(0)
+  const [subjectType, setSubjectType] = usePersistentState<BangumiSubjectType>('navigation.librarySubjectType', 2)
+  const [collectionType, setCollectionType] = usePersistentState<BangumiCollectionType | 0>('navigation.libraryCollectionType', 0)
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<BangumiCollectionItem | null>(null)
   const [collection, setCollection] = useState<BangumiProfileCache | null>(null)

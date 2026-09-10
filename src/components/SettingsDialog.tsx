@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, Globe2, HardDrive, Info, Laptop, Link2, Moon, Palette, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { BellRing, Check, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, Palette, Play, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { applyPartialBackup, backupSummary, createBackup, createPartialBackup, parseBackup, parsePartialBackup, partialBackupSectionMeta, partialBackupSummary } from '../data/backup'
 import type { BackupEnvelope, PartialBackupEnvelope, PartialBackupSection, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
 import { getThemeContrastIssues, normalizeThemePalettes, parseThemePalettes, serializeThemePalettes, themeColorFields, themeContrastMessage, themeCssVariables } from '../shared/theme'
 import { nowIso } from '../utils'
+import { playPomodoroAlarm, unlockPomodoroAlarm } from '../utils/pomodoroAlarm'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
@@ -12,11 +13,13 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } fr
 import { Input } from './ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Textarea } from './ui/textarea'
+import { usePersistentState } from '../lib/usePersistentState'
 
-type SettingsSection = 'appearance' | 'connections' | 'data' | 'about'
+type SettingsSection = 'appearance' | 'focus' | 'connections' | 'data' | 'about'
 
 const sections: Array<{ id: SettingsSection; label: string; description: string; icon: typeof Settings }> = [
   { id: 'appearance', label: '外观', description: '主题与显示', icon: Palette },
+  { id: 'focus', label: '专注', description: '番茄钟与提醒', icon: BellRing },
   { id: 'connections', label: '关联服务', description: 'Bangumi 收藏', icon: Link2 },
   { id: 'data', label: '数据与备份', description: '导入、导出', icon: Database },
   { id: 'about', label: '关于', description: '环境与版本', icon: Info },
@@ -47,7 +50,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
 function SettingsPanel() {
   const { snapshot, update, replace, flush } = useAppStore()
-  const [activeSection, setActiveSection] = useState<SettingsSection>('appearance')
+  const [activeSection, setActiveSection] = usePersistentState<SettingsSection>('navigation.settingsSection', 'appearance')
   const [username, setUsername] = useState(snapshot?.settings.bangumiUsername || '')
   const [message, setMessage] = useState('')
   const [pendingImport, setPendingImport] = useState<BackupEnvelope | null>(null)
@@ -61,6 +64,7 @@ function SettingsPanel() {
   const currentSection = sections.find((section) => section.id === activeSection) || sections[0]
   const setTheme = (theme: ThemeMode) => update((state) => ({ ...state, settings: { ...state.settings, theme, updatedAt: nowIso() } }))
   const setThemePalettes = (themePalettes: ThemePalettes) => update((state) => ({ ...state, settings: { ...state.settings, themePalettes, updatedAt: nowIso() } }))
+  const setPomodoroAlarmPath = (pomodoroAlarmPath: string) => update((state) => ({ ...state, settings: { ...state.settings, pomodoroAlarmPath, updatedAt: nowIso() } }))
   const saveUsername = () => {
     const clean = username.trim()
     if (clean === snapshot.settings.bangumiUsername) return
@@ -150,6 +154,7 @@ function SettingsPanel() {
       {message && <div className="notice success settings-notice"><Check size={16} /><span>{message}</span><button onClick={() => setMessage('')}>知道了</button></div>}
       <div className="settings-section-body">
         {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} onThemeChange={setTheme} onPalettesChange={setThemePalettes} />}
+        {activeSection === 'focus' && <FocusSettings alarmPath={snapshot.settings.pomodoroAlarmPath} onAlarmPathChange={setPomodoroAlarmPath} />}
         {activeSection === 'connections' && <ConnectionSettings username={username} onUsernameChange={setUsername} onSave={saveUsername} />}
         {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} onExportPartial={(section) => void exportPartialBackup(section)} onImportPartial={() => void importPartialBackup()} partialInputRef={partialImportInput} onPartialFile={(file) => void file.text().then(applyPartialImport)} />}
         {activeSection === 'about' && <AboutSettings />}
@@ -162,7 +167,7 @@ function SettingsPanel() {
 }
 
 function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }: { theme: ThemeMode; palettes: ThemePalettes; onThemeChange: (theme: ThemeMode) => void; onPalettesChange: (palettes: ThemePalettes) => void }) {
-  const [editingMode, setEditingMode] = useState<keyof ThemePalettes>(theme === 'dark' ? 'dark' : 'light')
+  const [editingMode, setEditingMode] = usePersistentState<keyof ThemePalettes>('navigation.themePaletteMode', theme === 'dark' ? 'dark' : 'light')
   const [cssCode, setCssCode] = useState(() => serializeThemePalettes(palettes))
   const [paletteMessage, setPaletteMessage] = useState('')
   const [previousPalettes, setPreviousPalettes] = useState<ThemePalettes | null>(null)
@@ -242,6 +247,25 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
 
 function ConnectionSettings({ username, onUsernameChange, onSave }: { username: string; onUsernameChange: (value: string) => void; onSave: () => void }) {
   return <section className="settings-pane"><SettingHeading icon={<UserRound />} title="Bangumi 收藏" description="匿名读取一个用户的公开收藏。" /><label className="setting-field">用户名<div className="inline-field"><Input value={username} onChange={(event) => onUsernameChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave() }} onBlur={onSave} placeholder="例如：sai" /><Button variant="outline" className="button secondary" onClick={onSave}>保存</Button></div><small>无需登录。封面会缓存到本地；在收藏库中点击“刷新”即可重新读取数据并更新封面。</small></label><Button variant="link" className="text-link" onClick={() => window.sylunae?.system.openExternal('https://bgm.tv') ?? window.open('https://bgm.tv', '_blank', 'noopener,noreferrer')}>打开 Bangumi <ExternalLink size={14} /></Button></section>
+}
+
+function FocusSettings({ alarmPath, onAlarmPathChange }: { alarmPath: string; onAlarmPathChange: (path: string) => void }) {
+  const [choosing, setChoosing] = useState(false)
+  const desktop = Boolean(window.sylunae)
+  const fileName = alarmPath.split(/[\\/]/).pop() || ''
+  const chooseAlarm = async () => {
+    if (!window.sylunae) return
+    setChoosing(true)
+    try {
+      const path = await window.sylunae.system.pickPomodoroAlarm()
+      if (path) onAlarmPathChange(path)
+    } finally { setChoosing(false) }
+  }
+  const previewAlarm = () => {
+    unlockPomodoroAlarm()
+    playPomodoroAlarm(alarmPath)
+  }
+  return <section className="settings-pane focus-settings"><SettingHeading icon={<BellRing />} title="番茄钟提示音" description="专注或休息结束时播放；未设置时使用默认的柔和钟铃。" /><div className="alarm-source"><div className="alarm-source-icon"><BellRing size={18} /></div><div><strong>{fileName || '默认钟铃'}</strong><small>{fileName ? '已选择自定义本地音频' : desktop ? '三声渐进的柔和提示音' : '自定义音频仅在桌面端可用'}</small></div></div><div className="alarm-actions"><Button variant="outline" className="button secondary" onClick={() => void chooseAlarm()} disabled={!desktop || choosing}><FolderOpen size={16} />{choosing ? '正在选择…' : '选择音频'}</Button><Button variant="outline" className="button secondary" onClick={previewAlarm} disabled={!desktop}><Play size={16} fill="currentColor" />试听</Button>{fileName && <Button variant="ghost" className="button alarm-reset" onClick={() => onAlarmPathChange('')}><RotateCcw size={16} />恢复默认</Button>}</div><small className="settings-note">支持 MP3、M4A、WAV、OGG、FLAC 等本地音频。若文件被移动或无法读取，将自动使用默认钟铃。</small></section>
 }
 
 function DataSettings({ counts, onExport, onImport, inputRef, onFile, onExportPartial, onImportPartial, partialInputRef, onPartialFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void; onExportPartial: (section: PartialBackupSection) => void; onImportPartial: () => void; partialInputRef: React.RefObject<HTMLInputElement | null>; onPartialFile: (file: File) => void }) {

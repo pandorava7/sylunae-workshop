@@ -3,11 +3,12 @@ import { BookOpen, Images, Rss, Sparkles } from 'lucide-react'
 import { LibraryPage } from './LibraryPage'
 import { ImageGalleryPage } from './ImageGalleryPage'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { usePersistentState } from '../lib/usePersistentState'
 
 type CollectionView = 'bangumi' | 'images' | 'rss'
 
 export function CollectionPage() {
-  const [view, setView] = useState<CollectionView>('bangumi')
+  const [view, setView] = usePersistentState<CollectionView>('navigation.collectionView', 'bangumi')
   const pageRef = useRef<HTMLElement>(null)
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
   return <section ref={pageRef} className="page collection-hub-page">

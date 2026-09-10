@@ -41,6 +41,8 @@ export interface AppSettings {
   themePalettes: ThemePalettes
   lastTool: ToolId
   sidebarCollapsed: boolean
+  sidebarWidth: number
+  pomodoroAlarmPath: string
   displayName: string
   bangumiUsername: string
   homeWallpaper: string
@@ -397,5 +399,8 @@ export interface SylunaeAPI {
     getTheme: () => Promise<'light' | 'dark'>
     openExternal: (url: string) => Promise<void>
     findFavicon: (url: string) => Promise<string | null>
+    notifyPomodoroComplete: (focusCompleted: boolean) => Promise<void>
+    pickPomodoroAlarm: () => Promise<string | null>
+    getPomodoroAlarmUrl: (path: string) => Promise<string | null>
   }
 }

@@ -15,6 +15,7 @@ import { MusicImportDialog } from '../components/MusicImportDialog'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AudioWaveform } from '../components/AudioWaveform'
 import { adjacentTrack, playbackQueue } from '../music/playback'
+import { usePersistentState } from '../lib/usePersistentState'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -22,7 +23,7 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
   const { snapshot, update } = useAppStore()
   const tracks = snapshot?.tracks || []
   const albums = snapshot?.albums || []
-  const [view, setView] = useState<'tracks' | 'albums'>('tracks')
+  const [view, setView] = usePersistentState<'tracks' | 'albums'>('navigation.musicView', 'tracks')
   const [query, setQuery] = useState('')
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)

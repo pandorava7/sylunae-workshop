@@ -17,6 +17,8 @@ const settingsSchema = z.object({
   }).optional(),
   lastTool: z.enum(['library', 'goals', 'home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
   sidebarCollapsed: z.boolean(),
+  sidebarWidth: z.number().min(220).default(300),
+  pomodoroAlarmPath: z.string().optional().default(''),
   displayName: z.string().optional().default('Pandora'),
   bangumiUsername: z.string(),
   homeWallpaper: z.string().optional().default(''),

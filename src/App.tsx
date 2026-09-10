@@ -6,6 +6,8 @@ import { useAppStore } from './app/AppStore'
 import type { MusicTrack, PomodoroMode, ToolId, WorkspaceToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
+import { playPomodoroAlarm, unlockPomodoroAlarm } from './utils/pomodoroAlarm'
+import { usePersistentState } from './lib/usePersistentState'
 
 const MusicPage = lazy(() => import('./pages/MusicPage').then((module) => ({ default: module.MusicPage })))
 const NotesPage = lazy(() => import('./pages/NotesPage').then((module) => ({ default: module.NotesPage })))
@@ -32,9 +34,8 @@ export default function App() {
   const [musicMounted, setMusicMounted] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
   const [pageScrolled, setPageScrolled] = useState(false)
-  const [activeTool, setActiveTool] = useState<ToolId>('home')
+  const [activeTool, setActiveTool] = usePersistentState<ToolId>('navigation.activeTool', 'home')
   const [homeIntent, setHomeIntent] = useState<'new-note' | 'todos' | 'pomodoro' | 'clipboard' | null>(null)
-  const [sidebarWidth, setSidebarWidth] = useState(300)
 
   useEffect(() => {
     if (!snapshot) return
@@ -64,6 +65,11 @@ export default function App() {
   }, [snapshot?.settings.lastTool, update])
 
   useEffect(() => {
+    if (!snapshot || window.localStorage.getItem('navigation.activeTool')) return
+    setActiveTool(snapshot.settings.lastTool === 'settings' ? 'home' : snapshot.settings.lastTool)
+  }, [snapshot, setActiveTool])
+
+  useEffect(() => {
     if (activeTool === 'music') setMusicMounted(true)
   }, [activeTool])
 
@@ -84,7 +90,10 @@ export default function App() {
         const minutes = nextMode === 'focus' ? state.pomodoro.focusMinutes : nextMode === 'shortBreak' ? state.pomodoro.shortBreakMinutes : state.pomodoro.longBreakMinutes
         return { ...state, pomodoro: { ...state.pomodoro, mode: nextMode, completedSessions, secondsRemaining: minutes * 60, running: false, endsAt: null } }
       })
-      if ('Notification' in window && Notification.permission === 'granted') new Notification('丝月工坊', { body: snapshot.pomodoro.mode === 'focus' ? '本轮专注完成，休息一下吧。' : '休息结束，准备开始下一轮专注。' })
+      const focusCompleted = snapshot.pomodoro.mode === 'focus'
+      playPomodoroAlarm(snapshot.settings.pomodoroAlarmPath)
+      if (window.sylunae) void window.sylunae.system.notifyPomodoroComplete(focusCompleted)
+      else if ('Notification' in window && Notification.permission === 'granted') new Notification('丝月工坊', { body: focusCompleted ? '本轮专注完成，休息一下吧。' : '休息结束，准备开始下一轮专注。' })
     }
     tick()
     const id = window.setInterval(tick, 1000)
@@ -103,6 +112,7 @@ export default function App() {
     })
   }
   const openFromHome = (tool: ToolId, intent?: 'new-note' | 'todos' | 'pomodoro' | 'clipboard') => {
+    if (intent === 'pomodoro') unlockPomodoroAlarm()
     setHomeIntent(intent ?? null)
     setActiveTool(tool)
     update((state) => {
@@ -117,12 +127,20 @@ export default function App() {
     return { ...state, settings: { ...state.settings, sidebarCollapsed: collapsed, updatedAt: new Date().toISOString() } }
   })
   const resizeSidebar = (nextWidth: number) => {
-    if (nextWidth <= sidebarCollapseThreshold) {
-      setSidebarCollapsed(true)
-      return
-    }
-    setSidebarWidth(Math.max(minimumSidebarWidth, nextWidth))
-    setSidebarCollapsed(false)
+    const collapsed = nextWidth <= sidebarCollapseThreshold
+    const width = collapsed ? undefined : Math.max(minimumSidebarWidth, nextWidth)
+    update((state) => {
+      if (state.settings.sidebarCollapsed === collapsed && (width === undefined || state.settings.sidebarWidth === width)) return state
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          sidebarCollapsed: collapsed,
+          ...(width === undefined ? {} : { sidebarWidth: width }),
+          updatedAt: new Date().toISOString(),
+        },
+      }
+    })
   }
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
   const page = {
@@ -134,7 +152,7 @@ export default function App() {
     notes: <NotesPage createOnOpen={homeIntent === 'new-note'} />,
   }[activeTool === 'settings' ? 'home' : activeTool]
 
-  const renderedSidebarWidth = snapshot.settings.sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth
+  const renderedSidebarWidth = snapshot.settings.sidebarCollapsed ? collapsedSidebarWidth : snapshot.settings.sidebarWidth
   const pomodoroTotal = Math.max(1, pomodoroDuration(snapshot.pomodoro))
   const pomodoroProgress = Math.min(100, Math.max(0, ((pomodoroTotal - snapshot.pomodoro.secondsRemaining) / pomodoroTotal) * 100))
   const pomodoroTime = `${String(Math.floor(snapshot.pomodoro.secondsRemaining / 60)).padStart(2, '0')}:${String(snapshot.pomodoro.secondsRemaining % 60).padStart(2, '0')}`

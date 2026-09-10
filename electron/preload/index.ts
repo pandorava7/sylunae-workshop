@@ -47,6 +47,9 @@ const api: SylunaeAPI = {
     getTheme: () => ipcRenderer.invoke('system:get-theme'),
     openExternal: (url) => ipcRenderer.invoke('system:open-external', url),
     findFavicon: (url) => ipcRenderer.invoke('system:find-favicon', url),
+    notifyPomodoroComplete: (focusCompleted) => ipcRenderer.invoke('system:notify-pomodoro-complete', focusCompleted),
+    pickPomodoroAlarm: () => ipcRenderer.invoke('system:pick-pomodoro-alarm'),
+    getPomodoroAlarmUrl: (path) => ipcRenderer.invoke('system:get-pomodoro-alarm-url', path),
   },
 }
 

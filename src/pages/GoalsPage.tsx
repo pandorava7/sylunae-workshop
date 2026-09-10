@@ -13,13 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Textarea } from '../components/ui/textarea'
+import { usePersistentState } from '../lib/usePersistentState'
 
 type SortMode = 'due' | 'progress' | 'updated'
 
 export function GoalsPage({ embedded = false }: { embedded?: boolean }) {
   const { snapshot, update } = useAppStore()
   const goals = snapshot?.goals || []
-  const [status, setStatus] = useState<GoalStatus>('active')
+  const [status, setStatus] = usePersistentState<GoalStatus>('navigation.goalStatus', 'active')
   const [sort, setSort] = useState<SortMode>('due')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)

@@ -8,6 +8,8 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { unlockPomodoroAlarm } from '../utils/pomodoroAlarm'
+import { usePersistentState } from '../lib/usePersistentState'
 
 export type TaskView = 'goals' | 'todos' | 'pomodoro' | 'countdown'
 
@@ -19,9 +21,9 @@ const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
 }
 
 export function TasksPage({ initialView = 'goals', startPomodoro = false }: { initialView?: TaskView; startPomodoro?: boolean }) {
-  const [view, setView] = useState<TaskView>(initialView)
+  const [view, setView] = usePersistentState<TaskView>('navigation.tasksView', initialView)
   const pageRef = useRef<HTMLElement>(null)
-  useEffect(() => setView(initialView), [initialView])
+  useEffect(() => { if (initialView !== 'goals') setView(initialView) }, [initialView, setView])
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
   return <section ref={pageRef} className="page tasks-page">
     <header className="page-header"><div><span className="eyebrow">TASK SPACE</span><h1>任务箱</h1><p>让计划、专注与日常小事在同一个地方有序发生</p></div></header>
@@ -41,7 +43,7 @@ function TodoPanel() {
   const [draft, setDraft] = useState('')
   const [priority, setPriority] = useState<TodoPriority>('medium')
   const [dueDate, setDueDate] = useState('')
-  const [filter, setFilter] = useState<'open' | 'done' | 'all'>('open')
+  const [filter, setFilter] = usePersistentState<'open' | 'done' | 'all'>('navigation.todoFilter', 'open')
   const visible = useMemo(() => todos.filter((todo) => filter === 'all' || (filter === 'done' ? todo.completed : !todo.completed)), [todos, filter])
   const add = () => {
     const title = draft.trim()
@@ -89,6 +91,7 @@ function PomodoroPanel({ autoStart = false }: { autoStart?: boolean }) {
   const minutesFor = (mode: PomodoroMode) => mode === 'focus' ? timer.focusMinutes : mode === 'shortBreak' ? timer.shortBreakMinutes : timer.longBreakMinutes
   const switchMode = (mode: PomodoroMode) => update((state) => ({ ...state, pomodoro: { ...state.pomodoro, mode, secondsRemaining: minutesFor(mode) * 60, running: false, endsAt: null } }))
   const toggle = async () => {
+    if (!timer.running) unlockPomodoroAlarm()
     if (!timer.running && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission()
     update((state) => ({ ...state, pomodoro: { ...state.pomodoro, running: !state.pomodoro.running, endsAt: state.pomodoro.running ? null : new Date(Date.now() + state.pomodoro.secondsRemaining * 1000).toISOString() } }))
   }

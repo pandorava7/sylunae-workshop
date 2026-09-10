@@ -10,6 +10,8 @@ export function createDefaultSnapshot(): AppSnapshot {
       themePalettes: normalizeThemePalettes(),
       lastTool: 'home',
       sidebarCollapsed: false,
+      sidebarWidth: 300,
+      pomodoroAlarmPath: '',
       displayName: 'Pandora',
       bangumiUsername: '',
       homeWallpaper: '',
