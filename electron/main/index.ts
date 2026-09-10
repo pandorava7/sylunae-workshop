@@ -7,9 +7,9 @@ import { basename, extname, join, relative, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import ffmpegPath from 'ffmpeg-static'
 import { create as createYoutubeDl } from 'youtube-dl-exec'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
+import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
 import type { AppSnapshot, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
@@ -366,10 +366,6 @@ function getTagLib() {
   return tagLibPromise
 }
 
-function unpackedPath(filePath: string): string {
-  return app.isPackaged ? filePath.replace('app.asar', 'app.asar.unpacked') : filePath
-}
-
 function getDefaultMusicDirectory(): string {
   const directory = resolve(app.getPath('userData'), 'music')
   mkdirSync(directory, { recursive: true })
@@ -524,9 +520,8 @@ async function importAudioUrl(url: URL, directory: string, report: ProgressRepor
 }
 
 async function importYoutube(url: URL, directory: string, report: ProgressReporter): Promise<MusicTrack> {
-  if (!ffmpegPath) throw new Error('FFmpeg 组件不可用，请重新安装桌面端')
-  const ytDlpBinary = unpackedPath(join(app.getAppPath(), 'node_modules', 'youtube-dl-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'))
-  const youtubeDl = createYoutubeDl(ytDlpBinary)
+  const mediaTools = getMediaToolPaths()
+  const youtubeDl = createYoutubeDl(mediaTools.ytDlp)
   report({ stage: 'reading', message: '正在读取视频信息…', percent: null })
   const metadata = await youtubeDl(url.toString(), { dumpSingleJson: true, skipDownload: true, noPlaylist: true, noWarnings: true })
   if (typeof metadata === 'string' || !metadata.id || !metadata.title) throw new Error('无法读取这个 YouTube 视频的信息')
@@ -549,7 +544,7 @@ async function importYoutube(url: URL, directory: string, report: ProgressReport
       audioQuality: 0,
       addMetadata: true,
       embedThumbnail: true,
-      ffmpegLocation: unpackedPath(ffmpegPath),
+      ffmpegLocation: mediaTools.ffmpeg,
       maxFilesize: '1G',
       noPlaylist: true,
       noWarnings: true,
@@ -754,6 +749,10 @@ function registerIpc(): void {
       ? importYoutube(checked.url, checked.directory, report)
       : importAudioUrl(checked.url, checked.directory, report)
   })
+  ipcMain.handle('music:get-media-tools-status', () => getMediaToolsStatus())
+  ipcMain.handle('music:install-media-tools', (event) => installMediaTools((progress) => {
+    if (!event.sender.isDestroyed()) event.sender.send('music:media-tools-progress', progress)
+  }))
   ipcMain.handle('music:relocate', async (_event, trackId: string) => {
     const result = await dialog.showOpenDialog({
       title: '重新定位音乐文件',

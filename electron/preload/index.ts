@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, ImageScanProgress, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
+import type { AppSnapshot, ImageScanProgress, MediaToolsProgress, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
 
 const api: SylunaeAPI = {
   platform: 'electron',
@@ -17,6 +17,13 @@ const api: SylunaeAPI = {
       const handler = (_event: Electron.IpcRendererEvent, progress: MusicImportProgress) => listener(progress)
       ipcRenderer.on('music:import-progress', handler)
       return () => ipcRenderer.removeListener('music:import-progress', handler)
+    },
+    getMediaToolsStatus: () => ipcRenderer.invoke('music:get-media-tools-status'),
+    installMediaTools: () => ipcRenderer.invoke('music:install-media-tools'),
+    onMediaToolsProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: MediaToolsProgress) => listener(progress)
+      ipcRenderer.on('music:media-tools-progress', handler)
+      return () => ipcRenderer.removeListener('music:media-tools-progress', handler)
     },
     relocate: (trackId) => ipcRenderer.invoke('music:relocate', trackId),
     checkPaths: (paths) => ipcRenderer.invoke('music:check-paths', paths),

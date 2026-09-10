@@ -17,18 +17,8 @@
   },
   "dependencies": {
     "better-sqlite3": "latest",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "cn": "^0.2.6",
-    "ffmpeg-static": "^5.3.0",
     "music-metadata": "latest",
-    "radix-ui": "^1.6.7",
-    "shadcn": "^4.21.0",
     "taglib-wasm": "^1.5.3",
-    "tailwind-merge": "^3.6.0",
-    "tw-animate-css": "^1.4.0",
-    "vaul": "^1.1.2",
-    "wavesurfer.js": "^7.12.11",
     "youtube-dl-exec": "^3.1.15"
   },
   "devDependencies": {
@@ -48,18 +38,27 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "^5.1.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cn": "^0.2.6",
     "dexie": "latest",
     "electron": "^41.10.3",
     "electron-builder": "latest",
     "electron-vite": "latest",
     "jsdom": "latest",
     "lucide-react": "latest",
+    "radix-ui": "^1.6.7",
     "react": "latest",
     "react-dom": "latest",
+    "shadcn": "^4.21.0",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
+    "tw-animate-css": "^1.4.0",
     "typescript": "latest",
+    "vaul": "^1.1.2",
     "vite": "^7.3.6",
     "vitest": "latest",
+    "wavesurfer.js": "^7.12.11",
     "zod": "latest"
   },
   "build": {
@@ -72,12 +71,17 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/youtube-dl-exec/bin/**/*",
+      "!node_modules/better-sqlite3/{build,deps,src}/**/*",
+      "!node_modules/better-sqlite3/binding.gyp",
+      "!node_modules/better-sqlite3/prebuilds/{darwin-*,linux-*,linuxmusl-*,win32-arm64.node}",
+      "!node_modules/node-addon-api/**/*"
     ],
+    "electronLanguages": ["zh-CN", "en-US"],
+    "compression": "maximum",
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/ffmpeg-static/**/*",
-      "node_modules/youtube-dl-exec/bin/**/*"
+      "node_modules/better-sqlite3/prebuilds/win32-x64.node"
     ],
     "win": {
       "target": "nsis",

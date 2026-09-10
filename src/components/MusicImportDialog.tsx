@@ -5,6 +5,7 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Progress } from './ui/progress'
+import { MediaToolsDialog } from './MediaToolsDialog'
 
 type ImportStep = 'choose' | MusicRemoteSource
 
@@ -53,6 +54,7 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [progress, setProgress] = useState<MusicImportProgress | null>(null)
+  const [mediaToolsOpen, setMediaToolsOpen] = useState(false)
   const activeTaskId = useRef<string | null>(null)
 
   useEffect(() => window.sylunae?.music.onImportProgress((next) => {
@@ -85,6 +87,18 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
       const selected = await window.sylunae.music.pickDownloadDirectory(directory)
       if (selected) setDirectory(selected)
     } catch (reason) { setError(readableError(reason)) }
+  }
+
+  const chooseYoutube = async () => {
+    if (!window.sylunae) return
+    setError('')
+    try {
+      const status = await window.sylunae.music.getMediaToolsStatus()
+      if (status.ready) setStep('youtube')
+      else setMediaToolsOpen(true)
+    } catch (reason) {
+      setError(readableError(reason))
+    }
   }
 
   const importRemote = async () => {
@@ -127,7 +141,7 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
             <span><FileAudio /></span>
             <div><strong>从文件导入</strong><small>选择电脑中已有的一个或多个音频文件</small></div>
           </button>
-          <button type="button" onClick={() => setStep('youtube')}>
+          <button type="button" onClick={() => void chooseYoutube()}>
             <span><Video /></span>
             <div><strong>从 YouTube 链接导入</strong><small>转换为 MP3，并提取视频元信息</small></div>
           </button>
@@ -173,5 +187,6 @@ export function MusicImportDialog({ open, onOpenChange, onImported }: {
         </DialogFooter>
       </>}
     </DialogContent>
+    <MediaToolsDialog open={mediaToolsOpen} onOpenChange={setMediaToolsOpen} onReady={() => setStep('youtube')} />
   </Dialog>
 }

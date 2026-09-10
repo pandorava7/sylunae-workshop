@@ -231,6 +231,30 @@ export interface MusicRemoteImport {
   directory: string
 }
 
+export interface MediaToolComponentStatus {
+  id: 'ffmpeg' | 'yt-dlp'
+  label: string
+  version: string
+  installed: boolean
+  installedBytes: number
+}
+
+export interface MediaToolsStatus {
+  ready: boolean
+  installing: boolean
+  components: MediaToolComponentStatus[]
+  installedBytes: number
+}
+
+export interface MediaToolsProgress {
+  stage: 'downloading' | 'verifying' | 'complete'
+  tool: 'ffmpeg' | 'yt-dlp' | null
+  message: string
+  receivedBytes: number
+  totalBytes: number | null
+  percent: number | null
+}
+
 export interface NoteFolder {
   id: string
   name: string
@@ -374,6 +398,9 @@ export interface SylunaeAPI {
     pickDownloadDirectory: (currentDirectory: string) => Promise<string | null>
     importRemote: (input: MusicRemoteImport) => Promise<MusicTrack>
     onImportProgress: (listener: (progress: MusicImportProgress) => void) => () => void
+    getMediaToolsStatus: () => Promise<MediaToolsStatus>
+    installMediaTools: () => Promise<MediaToolsStatus>
+    onMediaToolsProgress: (listener: (progress: MediaToolsProgress) => void) => () => void
     relocate: (trackId: string) => Promise<MusicTrack | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getAudioUrl: (path: string) => Promise<string>

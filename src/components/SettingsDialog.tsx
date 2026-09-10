@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, Check, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, Palette, Play, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { BellRing, Check, CheckCircle2, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, PackageOpen, Palette, Play, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { applyPartialBackup, backupSummary, createBackup, createPartialBackup, parseBackup, parsePartialBackup, partialBackupSectionMeta, partialBackupSummary } from '../data/backup'
 import type { BackupEnvelope, PartialBackupEnvelope, PartialBackupSection, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
@@ -14,6 +14,8 @@ import { Input } from './ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Textarea } from './ui/textarea'
 import { usePersistentState } from '../lib/usePersistentState'
+import type { MediaToolsStatus } from '../shared/types'
+import { MediaToolsDialog } from './MediaToolsDialog'
 
 type SettingsSection = 'appearance' | 'focus' | 'connections' | 'data' | 'about'
 
@@ -274,7 +276,19 @@ function DataSettings({ counts, onExport, onImport, inputRef, onFile, onExportPa
 
 function AboutSettings() {
   const desktop = Boolean(window.sylunae)
-  return <section className="settings-pane"><SettingHeading icon={desktop ? <HardDrive /> : <Globe2 />} title="运行环境" description={desktop ? 'Electron 桌面版' : '浏览器轻量版'} /><dl className="environment-list"><div><dt>数据位置</dt><dd>{desktop ? '本机 SQLite 数据库' : '浏览器 IndexedDB'}</dd></div><div><dt>本地音乐</dt><dd>{desktop ? '可用' : '仅桌面版可用'}</dd></div><div><dt>云端同步</dt><dd>未启用</dd></div><div><dt>应用版本</dt><dd>0.1.0</dd></div></dl></section>
+  const [toolsStatus, setToolsStatus] = useState<MediaToolsStatus | null>(null)
+  const [toolsDialogOpen, setToolsDialogOpen] = useState(false)
+  const refreshTools = () => { if (desktop) void window.sylunae!.music.getMediaToolsStatus().then(setToolsStatus) }
+  useEffect(refreshTools, [desktop])
+  return <div className="about-settings">
+    <section className="settings-pane"><SettingHeading icon={desktop ? <HardDrive /> : <Globe2 />} title="运行环境" description={desktop ? 'Electron 桌面版' : '浏览器轻量版'} /><dl className="environment-list"><div><dt>数据位置</dt><dd>{desktop ? '本机 SQLite 数据库' : '浏览器 IndexedDB'}</dd></div><div><dt>本地音乐</dt><dd>{desktop ? '可用' : '仅桌面版可用'}</dd></div><div><dt>云端同步</dt><dd>未启用</dd></div><div><dt>应用版本</dt><dd>0.1.0</dd></div></dl></section>
+    {desktop && <section className="settings-pane media-tools-pane">
+      <SettingHeading icon={<PackageOpen />} title="媒体工具" description="按需启用 YouTube 音频导入能力。" />
+      <div className="media-tools-card"><span className={toolsStatus?.ready ? 'ready' : ''}>{toolsStatus?.ready ? <CheckCircle2 /> : <Download />}</span><div><strong>{toolsStatus?.ready ? '媒体工具已安装' : '媒体工具尚未安装'}</strong><small>{toolsStatus?.ready ? 'FFmpeg 与 yt-dlp 已准备完成' : '使用时再下载，约占用 96 MB 本地空间'}</small></div></div>
+      <Button variant="outline" className="button secondary" onClick={() => setToolsDialogOpen(true)} disabled={!toolsStatus || toolsStatus.ready}>{toolsStatus?.ready ? <CheckCircle2 /> : <Download />}{toolsStatus?.ready ? '已准备完成' : '预先下载媒体工具'}</Button>
+      <MediaToolsDialog open={toolsDialogOpen} onOpenChange={setToolsDialogOpen} onReady={refreshTools} />
+    </section>}
+  </div>
 }
 
 function SettingHeading({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
