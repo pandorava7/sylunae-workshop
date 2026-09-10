@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { MouseEvent } from 'react'
-import { ExternalLink, Search, Sparkles, Star, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ExternalLink, RefreshCw, Search, Sparkles, Star, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { COLLECTION_LABELS, fetchBangumiCollection, SUBJECT_LABELS } from '../data/bangumi'
+import { clearBangumiCoverCache, loadBangumiCover } from '../data/bangumiCoverCache'
 import type { BangumiCollectionItem, BangumiCollectionType, BangumiProfileCache, BangumiSubjectType } from '../shared/types'
 import { formatDate } from '../utils'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { EmptyState, Spinner } from '../components/Icons'
-import {
-  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
-} from '../components/ui/pagination'
+import { ContentPagination } from '../components/ContentPagination'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 
@@ -19,6 +17,7 @@ const SUBJECT_TYPES = [2, 3, 4, 6, 1] as const satisfies readonly BangumiSubject
 const COLLECTION_TYPES = [1, 2, 3, 4, 5] as const satisfies readonly BangumiCollectionType[]
 
 export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
+  const contentRef = useRef<HTMLElement>(null)
   const { snapshot } = useAppStore()
   const [subjectType, setSubjectType] = useState<BangumiSubjectType>(2)
   const [collectionType, setCollectionType] = useState<BangumiCollectionType | 0>(0)
@@ -27,6 +26,8 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
   const [collection, setCollection] = useState<BangumiProfileCache | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [clearingCoverCache, setClearingCoverCache] = useState(false)
   const username = snapshot?.settings.bangumiUsername.trim() || ''
   const cache = collection
 
@@ -59,7 +60,21 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
       clearTimeout(timeout)
       controller.abort()
     }
-  }, [username])
+  }, [username, refreshKey])
+
+  const refresh = async () => {
+    if (syncing || clearingCoverCache) return
+    setClearingCoverCache(true)
+    setSyncError('')
+    try {
+      await clearBangumiCoverCache()
+      setRefreshKey((value) => value + 1)
+    } catch {
+      setSyncError('无法清除图片缓存，请稍后重试')
+    } finally {
+      setClearingCoverCache(false)
+    }
+  }
 
   const subjectCounts = useMemo(() => {
     const counts = new Map<BangumiSubjectType, number>()
@@ -103,7 +118,10 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
     </section>
   }
 
-  return <section className={`${embedded ? 'collection-content' : 'page'} library-page`}>
+  return <section ref={contentRef} className={`${embedded ? 'collection-content' : 'page'} library-page`}>
+    <div className="library-actions"><Button variant="outline" className="button secondary" onClick={() => void refresh()} disabled={syncing || clearingCoverCache}>
+      <RefreshCw size={15} className={syncing || clearingCoverCache ? 'spin' : undefined} />刷新
+    </Button></div>
     <Tabs className="library-tabs" value={String(subjectType)} onValueChange={(value) => setSubjectType(Number(value) as BangumiSubjectType)}>
       <TabsList variant="line" aria-label="收藏类型">
         {visibleSubjectTypes.map((type) => <TabsTrigger key={type} value={String(type)}>
@@ -124,13 +142,13 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
     {syncError && <div className="notice error"><span>{syncError}</span><button onClick={() => setSyncError('')} aria-label="关闭提示"><X size={15} /></button></div>}
     {syncing ? <div className="center-loading"><Spinner /><span>正在读取你的公开收藏…</span></div> : items.length === 0 ?
       <EmptyState icon={<Search size={24} />} title={cache ? '这个分类还没有条目' : '未能读取收藏'} description={cache ? '切换一个类型或收藏状态试试。' : '重新进入收藏库时会再次实时加载。'} /> : <>
-        <div className="collection-grid">{pagedItems.map((item) => <CollectionCard key={item.subjectId} item={item} onClick={() => setSelected(item)} />)}</div>
-        <LibraryPagination page={page} pageCount={pageCount} onPageChange={setPage} />
+        <div className="collection-grid">{pagedItems.map((item) => <CollectionCard key={`${item.subjectId}-${refreshKey}`} item={item} onClick={() => setSelected(item)} />)}</div>
+        <ContentPagination page={page} pageCount={pageCount} onPageChange={setPage} scrollTargetRef={contentRef} />
       </>}
-    {cache && <div className="sync-caption">本次加载：{formatDate(cache.syncedAt, true)} · 仅包含公开收藏</div>}
+    {cache && <div className="sync-caption">本次加载：{formatDate(cache.syncedAt, true)} · 封面已缓存到本地</div>}
 
     {selected && <Sheet open onOpenChange={(open) => { if (!open) setSelected(null) }}><SheetContent className="detail-drawer" showCloseButton>
-      <div className="drawer-cover">{selected.cover ? <img src={selected.cover} alt="" /> : <div className="cover-placeholder"><Sparkles /></div>}</div>
+      <div className="drawer-cover">{selected.cover ? <BangumiCover key={refreshKey} src={selected.cover} alt="" /> : <div className="cover-placeholder"><Sparkles /></div>}</div>
       <div className="drawer-content"><div className="badge-row"><span className="badge">{SUBJECT_LABELS[selected.subjectType]}</span><span className="badge accent">{COLLECTION_LABELS[selected.collectionType]}</span></div>
         <SheetTitle asChild><h2>{selected.nameCn || selected.name}</h2></SheetTitle><SheetDescription asChild><div className="original-title">{selected.nameCn && selected.name !== selected.nameCn ? selected.name : '收藏条目详情'}</div></SheetDescription>
         <div className="stat-row"><div><span>站点评分</span><strong>{selected.score || '—'}</strong></div><div><span>我的评分</span><strong>{selected.rate || '—'}</strong></div><div><span>排名</span><strong>{selected.rank ? `#${selected.rank}` : '—'}</strong></div></div>
@@ -152,7 +170,7 @@ function CollectionCard({ item, onClick }: { item: BangumiCollectionItem; onClic
 
   return <button className="collection-card" onClick={onClick} aria-label={`查看 ${item.nameCn || item.name}`}>
     <div className="collection-cover">
-      {item.cover ? <img src={item.cover} alt="" loading="lazy" decoding="async" /> : <div className="cover-placeholder"><Sparkles /></div>}
+      {item.cover ? <BangumiCover src={item.cover} alt="" loading="lazy" /> : <div className="cover-placeholder"><Sparkles /></div>}
       <span className={`collection-state state-${item.collectionType}`}>{COLLECTION_LABELS[item.collectionType]}</span>
       <span className={`collection-score${hasPersonalRating ? '' : ' website-score'}`}><Star size={13} fill="currentColor" />{formatScore(hasPersonalRating ? item.rate : item.score)}</span>
       <div className="collection-title"><h3>{item.nameCn || item.name}</h3>{year && <span>{year}</span>}</div>
@@ -165,28 +183,28 @@ function CollectionCard({ item, onClick }: { item: BangumiCollectionItem; onClic
   </button>
 }
 
-function LibraryPagination({ page, pageCount, onPageChange }: { page: number; pageCount: number; onPageChange: (page: number) => void }) {
-  if (pageCount <= 1) return null
-  const pages = paginationItems(page, pageCount)
-  const selectPage = (event: MouseEvent, nextPage: number) => {
-    event.preventDefault()
-    onPageChange(nextPage)
-  }
+function BangumiCover({ src, alt, loading }: { src: string; alt: string; loading?: 'lazy' | 'eager' }) {
+  const [imageSrc, setImageSrc] = useState(src)
 
-  return <Pagination className="library-pagination">
-    <PaginationContent>
-      <PaginationItem><PaginationPrevious href="#" text="上一页" aria-disabled={page === 1} className={page === 1 ? 'disabled' : ''} onClick={(event) => { if (page > 1) selectPage(event, page - 1); else event.preventDefault() }} /></PaginationItem>
-      {pages.map((item) => typeof item === 'number' ? <PaginationItem key={item}><PaginationLink href="#" isActive={item === page} onClick={(event) => selectPage(event, item)}>{item}</PaginationLink></PaginationItem> : <PaginationItem key={item}><PaginationEllipsis /></PaginationItem>)}
-      <PaginationItem><PaginationNext href="#" text="下一页" aria-disabled={page === pageCount} className={page === pageCount ? 'disabled' : ''} onClick={(event) => { if (page < pageCount) selectPage(event, page + 1); else event.preventDefault() }} /></PaginationItem>
-    </PaginationContent>
-  </Pagination>
-}
+  useEffect(() => {
+    let active = true
+    let objectUrl = ''
+    setImageSrc(src)
+    void loadBangumiCover(src).then((url) => {
+      if (!active) {
+        if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+        return
+      }
+      objectUrl = url.startsWith('blob:') ? url : ''
+      setImageSrc(url)
+    })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [src])
 
-function paginationItems(current: number, total: number): Array<number | string> {
-  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
-  if (current <= 4) return [1, 2, 3, 4, 5, 'end', total]
-  if (current >= total - 3) return [1, 'start', total - 4, total - 3, total - 2, total - 1, total]
-  return [1, 'start', current - 1, current, current + 1, 'end', total]
+  return <img src={imageSrc} alt={alt} loading={loading} decoding="async" />
 }
 
 function formatScore(score: number): string {

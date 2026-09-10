@@ -26,6 +26,7 @@ export function createDefaultSnapshot(): AppSnapshot {
       updatedAt: now,
     },
     bangumi: null,
+    imageLibrary: { roots: [], collections: [], assets: [] },
     tracks: [],
     albums: [],
     folders: [],

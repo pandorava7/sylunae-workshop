@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
+import type { AppSnapshot, ImageScanProgress, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
 
 const api: SylunaeAPI = {
   platform: 'electron',
@@ -23,6 +23,21 @@ const api: SylunaeAPI = {
     getAudioUrl: (path) => ipcRenderer.invoke('music:get-url', path),
     readMetadata: (path) => ipcRenderer.invoke('music:read-metadata', path),
     updateMetadata: (update) => ipcRenderer.invoke('music:update-metadata', update),
+  },
+  images: {
+    pick: () => ipcRenderer.invoke('images:pick'),
+    pickRoot: (recursive) => ipcRenderer.invoke('images:pick-root', recursive),
+    scan: (taskId, library, rootId) => ipcRenderer.invoke('images:scan', taskId, library, rootId),
+    cancelScan: (taskId) => ipcRenderer.invoke('images:cancel-scan', taskId),
+    onScanProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: ImageScanProgress) => listener(progress)
+      ipcRenderer.on('images:scan-progress', handler)
+      return () => ipcRenderer.removeListener('images:scan-progress', handler)
+    },
+    relocateRoot: (taskId, rootId, library) => ipcRenderer.invoke('images:relocate-root', taskId, rootId, library),
+    relocateAsset: (assetId, library) => ipcRenderer.invoke('images:relocate-asset', assetId, library),
+    checkPaths: (paths) => ipcRenderer.invoke('images:check-paths', paths),
+    getUrls: (paths) => ipcRenderer.invoke('images:get-urls', paths),
   },
   backup: {
     exportFile: (contents) => ipcRenderer.invoke('backup:export', contents),

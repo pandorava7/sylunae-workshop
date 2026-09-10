@@ -42,10 +42,10 @@ export interface ThemeContrastIssue {
 
 export const defaultThemePalettes: ThemePalettes = {
   light: {
-    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#eeeeee',
-    text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
-    accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
-    success: '#4f8060', successSoft: '#eaf3ed',
+    bg: '#ffffff', surface: '#ffffff', surface2: '#f7f7f7', surface3: '#eeeeee', sidebarBg: '#f8f8f8',
+    text: '#202020', mutedText: '#707070', faint: '#a0a0a0', line: '#e8e8e8', brand: '#2f2f2f',
+    accentSoft: '#f2f2f2', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#fbeeee',
+    success: '#4f8060', successSoft: '#edf5ef',
   },
   dark: {
     bg: '#171717', surface: '#1f1f1f', surface2: '#292929', surface3: '#333333', sidebarBg: '#202020',
@@ -72,7 +72,7 @@ const legacyDefaultThemePalettes: ThemePalettes = {
 
 const previousDefaultThemePalettes: ThemePalettes = {
   light: {
-    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#f7f7f7',
+    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#eeeeee',
     text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
     accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
     success: '#4f8060', successSoft: '#eaf3ed',
@@ -83,6 +83,16 @@ const previousDefaultThemePalettes: ThemePalettes = {
     accentSoft: '#2c2c2c', accentDeep: '#ffffff', danger: '#df7070', dangerSoft: '#382323',
     success: '#76a985', successSoft: '#233128',
   },
+}
+
+const olderDefaultThemePalettes: ThemePalettes = {
+  light: {
+    bg: '#f7f7f7', surface: '#ffffff', surface2: '#f3f3f3', surface3: '#e9e9e9', sidebarBg: '#f7f7f7',
+    text: '#202020', mutedText: '#6f6f6f', faint: '#9b9b9b', line: '#e5e5e5', brand: '#2f2f2f',
+    accentSoft: '#eeeeee', accentDeep: '#171717', danger: '#c94a4a', dangerSoft: '#f9eaea',
+    success: '#4f8060', successSoft: '#eaf3ed',
+  },
+  dark: previousDefaultThemePalettes.dark,
 }
 
 const colorPattern = /^#[0-9a-f]{6}$/i
@@ -158,7 +168,7 @@ export function migrateDefaultThemePalettes(value?: Partial<Record<'light' | 'da
   const palettes = normalizeThemePalettes(value)
   const matchesPalette = (candidate: ThemePalettes) => (['light', 'dark'] as const).every((mode) =>
     themeColorFields.every(({ key }) => palettes[mode][key] === candidate[mode][key]))
-  return matchesPalette(legacyDefaultThemePalettes) || matchesPalette(previousDefaultThemePalettes)
+  return matchesPalette(legacyDefaultThemePalettes) || matchesPalette(previousDefaultThemePalettes) || matchesPalette(olderDefaultThemePalettes)
     ? defaultThemePalettes
     : palettes
 }

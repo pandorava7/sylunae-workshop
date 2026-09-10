@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createDefaultSnapshot } from '../../src/shared/defaults'
 import type { AppSnapshot } from '../../src/shared/types'
 import { normalizeThemePalettes } from '../../src/shared/theme'
+import { normalizeImageLibrary } from '../../src/images/library'
 
 let database: Database.Database | null = null
 
@@ -67,6 +68,7 @@ export function loadSnapshot(): AppSnapshot {
       pomodoro: { ...defaults.pomodoro, ...parsed.pomodoro },
       clipboardSnippets: parsed.clipboardSnippets ?? [],
       launcherLinks: parsed.launcherLinks ?? [],
+      imageLibrary: normalizeImageLibrary(parsed.imageLibrary),
     }
   } catch {
     const fallback = createDefaultSnapshot()

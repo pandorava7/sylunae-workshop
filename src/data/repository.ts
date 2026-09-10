@@ -3,14 +3,18 @@ import { createDefaultSnapshot } from '../shared/defaults'
 import type { AppSnapshot } from '../shared/types'
 import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
+import { normalizeImageLibrary } from '../images/library'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
+interface BangumiCoverRow { url: string; blob: Blob; cachedAt: string }
 
 class SylunaeDatabase extends Dexie {
   state!: EntityTable<StateRow, 'id'>
+  bangumiCovers!: EntityTable<BangumiCoverRow, 'url'>
   constructor() {
     super('siyue-workshop')
     this.version(1).stores({ state: 'id' })
+    this.version(2).stores({ state: 'id', bangumiCovers: 'url, cachedAt' })
   }
 }
 
@@ -62,8 +66,9 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     todos: snapshot.todos ?? [],
     pomodoro: { ...defaults.pomodoro, ...snapshot.pomodoro },
     clipboardSnippets: snapshot.clipboardSnippets ?? [],
-    launcherLinks: snapshot.launcherLinks ?? [],
-    bangumi: null,
+      launcherLinks: snapshot.launcherLinks ?? [],
+      imageLibrary: normalizeImageLibrary(snapshot.imageLibrary),
+      bangumi: null,
   }
 }
 
@@ -91,5 +96,18 @@ export const repository = {
       await ensureBrowserMigration()
       await db.state.put({ id: 1, snapshot: safe })
     }
+  },
+}
+
+/** Persistent cover cache kept separate from the user's exported application data. */
+export const bangumiCoverCache = {
+  async get(url: string): Promise<Blob | null> {
+    return (await db.bangumiCovers.get(url))?.blob ?? null
+  },
+  async put(url: string, blob: Blob): Promise<void> {
+    await db.bangumiCovers.put({ url, blob, cachedAt: new Date().toISOString() })
+  },
+  async clear(): Promise<void> {
+    await db.bangumiCovers.clear()
   },
 }

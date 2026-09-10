@@ -91,6 +91,65 @@ export interface BangumiProfileCache {
   syncedAt: string
 }
 
+export type ImageAspectType = 'landscape' | 'portrait' | 'square'
+
+export interface ImageLibraryRoot {
+  id: string
+  path: string
+  name: string
+  recursive: boolean
+  identity: string
+  missing: boolean
+  createdAt: string
+  updatedAt: string
+  lastScannedAt: string | null
+  collectionId: string | null
+}
+
+export interface ImageCollection {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ImageAsset {
+  id: string
+  rootId: string | null
+  collectionIds: string[]
+  path: string
+  relativePath: string
+  name: string
+  extension: string
+  size: number
+  mtimeMs: number
+  width: number
+  height: number
+  aspectType: ImageAspectType
+  identity: string
+  hash: string
+  missing: boolean
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ImageLibraryState {
+  roots: ImageLibraryRoot[]
+  collections: ImageCollection[]
+  assets: ImageAsset[]
+}
+
+export type ImageScanStage = 'discovering' | 'indexing' | 'complete' | 'cancelled'
+
+export interface ImageScanProgress {
+  taskId: string
+  stage: ImageScanStage
+  message: string
+  completed: number
+  total: number | null
+}
+
 export interface MusicTrack {
   id: string
   path: string
@@ -249,6 +308,7 @@ export interface AppSnapshot {
   version: 1
   settings: AppSettings
   bangumi: BangumiProfileCache | null
+  imageLibrary: ImageLibraryState
   tracks: MusicTrack[]
   albums: MusicAlbum[]
   folders: NoteFolder[]
@@ -293,6 +353,17 @@ export interface SylunaeAPI {
     getAudioUrl: (path: string) => Promise<string>
     readMetadata: (path: string) => Promise<MusicEditableMetadata>
     updateMetadata: (update: MusicMetadataUpdate) => Promise<MusicTrack>
+  }
+  images: {
+    pick: () => Promise<ImageAsset[]>
+    pickRoot: (recursive: boolean) => Promise<ImageLibraryRoot | null>
+    scan: (taskId: string, library: ImageLibraryState, rootId?: string) => Promise<ImageLibraryState>
+    cancelScan: (taskId: string) => Promise<void>
+    onScanProgress: (listener: (progress: ImageScanProgress) => void) => () => void
+    relocateRoot: (taskId: string, rootId: string, library: ImageLibraryState) => Promise<ImageLibraryState | null>
+    relocateAsset: (assetId: string, library: ImageLibraryState) => Promise<ImageLibraryState | null>
+    checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
+    getUrls: (paths: string[]) => Promise<Record<string, string>>
   }
   backup: {
     exportFile: (contents: string) => Promise<boolean>

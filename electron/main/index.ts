@@ -1,14 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, protocol, shell } from 'electron'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { open, readdir, stat } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
 import { isIP } from 'node:net'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, extname, join, relative, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import ffmpegPath from 'ffmpeg-static'
 import { create as createYoutubeDl } from 'youtube-dl-exec'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
-import type { AppSnapshot, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
+import type { AppSnapshot, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
 const AUDIO_MIME_TYPES: Record<string, string> = {
@@ -21,18 +23,336 @@ const AUDIO_MIME_TYPES: Record<string, string> = {
   '.flac': 'audio/flac',
   '.opus': 'audio/ogg',
 }
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'])
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.gif': 'image/gif', '.bmp': 'image/bmp', '.avif': 'image/avif',
+}
 const sessionMediaPaths = new Set<string>()
 const sessionDownloadDirectories = new Set<string>()
+const sessionImageRootPaths = new Set<string>()
+const cancelledImageScans = new Set<string>()
 let tagLibPromise: ReturnType<typeof initializeTagLib> | null = null
 const MAX_REMOTE_AUDIO_BYTES = 1024 * 1024 * 1024
 type ProgressReporter = (progress: Omit<MusicImportProgress, 'taskId' | 'source'>) => void
+type ImageProgressReporter = (progress: Omit<ImageScanProgress, 'taskId'>) => void
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'sylunae-media', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
 function isIndexedPath(filePath: string): boolean {
-  return sessionMediaPaths.has(filePath) || loadSnapshot().tracks.some((track) => track.path === filePath)
+  const snapshot = loadSnapshot()
+  return sessionMediaPaths.has(filePath)
+    || snapshot.tracks.some((track) => track.path === filePath)
+    || snapshot.imageLibrary?.assets.some((asset) => asset.path === filePath)
+}
+
+function pathKey(filePath: string): string {
+  return process.platform === 'win32' ? resolve(filePath).toLocaleLowerCase() : resolve(filePath)
+}
+
+function aspectType(width: number, height: number): ImageAspectType {
+  const ratio = height > 0 ? width / height : 1
+  if (ratio >= 0.9 && ratio <= 1.1) return 'square'
+  return ratio > 1 ? 'landscape' : 'portrait'
+}
+
+function ensureImageScanActive(taskId: string): void {
+  if (cancelledImageScans.has(taskId)) throw new Error('IMAGE_SCAN_CANCELLED')
+}
+
+async function mapConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await worker(items[index])
+    }
+  }))
+  return results
+}
+
+async function listImages(directory: string, recursive: boolean, taskId: string, report: ImageProgressReporter): Promise<string[]> {
+  const files: string[] = []
+  const pending = [directory]
+  let scannedDirectories = 0
+  while (pending.length) {
+    ensureImageScanActive(taskId)
+    const batch = pending.splice(0, 24)
+    const batches = await Promise.allSettled(batch.map((item) => readdir(item, { withFileTypes: true }).then((entries) => ({ directory: item, entries }))))
+    for (const result of batches) {
+      if (result.status !== 'fulfilled') continue
+      scannedDirectories += 1
+      for (const entry of result.value.entries) {
+        const filePath = join(result.value.directory, entry.name)
+        if (entry.isFile() && IMAGE_EXTENSIONS.has(extname(entry.name).toLowerCase())) files.push(filePath)
+        else if (recursive && entry.isDirectory()) pending.push(filePath)
+      }
+    }
+    report({ stage: 'discovering', message: `正在查找图片 · ${files.length} 张`, completed: scannedDirectories, total: null })
+  }
+  return files
+}
+
+interface ImageFileInfo {
+  filePath: string
+  size: number
+  mtimeMs: number
+  identity: string
+}
+
+interface RootedImageFileInfo extends ImageFileInfo {
+  root: ImageLibraryRoot
+}
+
+async function inspectImage(info: ImageFileInfo) {
+  const { filePath } = info
+  const handle = await open(filePath, 'r')
+  try {
+    const headLength = Math.min(info.size, 256 * 1024)
+    const head = Buffer.allocUnsafe(headLength)
+    await handle.read(head, 0, headLength, 0)
+    let dimensions: { width: number; height: number }
+    try {
+      try { dimensions = imageDimensions(head, extname(filePath).toLowerCase()) }
+      catch {
+        const extendedLength = Math.min(info.size, 2 * 1024 * 1024)
+        const extended = Buffer.allocUnsafe(extendedLength)
+        await handle.read(extended, 0, extendedLength, 0)
+        dimensions = imageDimensions(extended, extname(filePath).toLowerCase())
+      }
+    } catch {
+      dimensions = nativeImageDimensions(filePath)
+    }
+    const sampleSize = Math.min(info.size, 64 * 1024)
+    const middle = Buffer.allocUnsafe(sampleSize)
+    const tail = Buffer.allocUnsafe(sampleSize)
+    const middleStart = Math.max(0, Math.floor((info.size - sampleSize) / 2))
+    const tailStart = Math.max(0, info.size - sampleSize)
+    await Promise.all([
+      handle.read(middle, 0, sampleSize, middleStart),
+      handle.read(tail, 0, sampleSize, tailStart),
+    ])
+    const fingerprint = createHash('sha256').update(String(info.size)).update(head).update(middle).update(tail).digest('hex')
+    return {
+      size: info.size, mtimeMs: info.mtimeMs, width: dimensions.width, height: dimensions.height,
+      identity: info.identity, hash: `sample-v1:${fingerprint}`,
+    }
+  } finally { await handle.close() }
+}
+
+function nativeImageDimensions(filePath: string): { width: number; height: number } {
+  const { width, height } = nativeImage.createFromPath(filePath).getSize()
+  if (width > 0 && height > 0) return { width, height }
+  throw new Error('无法读取图片尺寸')
+}
+
+function imageMimeTypeFromHeader(data: Buffer): string | null {
+  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (data.length >= 3 && data.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'image/jpeg'
+  if (data.length >= 6 && ['GIF87a', 'GIF89a'].includes(data.toString('ascii', 0, 6))) return 'image/gif'
+  if (data.length >= 2 && data.toString('ascii', 0, 2) === 'BM') return 'image/bmp'
+  if (data.length >= 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
+  if (data.length >= 12 && data.toString('ascii', 4, 8) === 'ftyp' && ['avif', 'avis'].includes(data.toString('ascii', 8, 12))) return 'image/avif'
+  return null
+}
+
+async function imageMimeType(filePath: string, extension: string): Promise<string> {
+  const fallback = IMAGE_MIME_TYPES[extension] || 'application/octet-stream'
+  try {
+    const handle = await open(filePath, 'r')
+    try {
+      const header = Buffer.alloc(32)
+      const { bytesRead } = await handle.read(header, 0, header.length, 0)
+      return imageMimeTypeFromHeader(header.subarray(0, bytesRead)) || fallback
+    } finally { await handle.close() }
+  } catch { return fallback }
+}
+
+async function parseImageAsset(filePath: string, id: string = randomUUID()): Promise<ImageAsset> {
+  const resolvedPath = resolve(filePath)
+  const value = await stat(resolvedPath, { bigint: true })
+  const details = await inspectImage({
+    filePath: resolvedPath,
+    size: Number(value.size),
+    mtimeMs: Number(value.mtimeMs),
+    identity: `${value.dev.toString()}:${value.ino.toString()}`,
+  })
+  const now = new Date().toISOString()
+  return {
+    id,
+    rootId: null,
+    collectionIds: [],
+    path: resolvedPath,
+    relativePath: basename(resolvedPath),
+    name: basename(resolvedPath),
+    extension: extname(resolvedPath).toLowerCase(),
+    ...details,
+    aspectType: aspectType(details.width, details.height),
+    missing: false,
+    metadata: {},
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function imageDimensions(data: Buffer, extension: string): { width: number; height: number } {
+  if (data.length >= 12 && data.toString('ascii', 4, 8) === 'ftyp' && ['avif', 'avis'].includes(data.toString('ascii', 8, 12))) {
+    for (let offset = 4; offset + 16 <= data.length; offset += 1) {
+      if (data.toString('ascii', offset, offset + 4) !== 'ispe') continue
+      const width = data.readUInt32BE(offset + 8)
+      const height = data.readUInt32BE(offset + 12)
+      if (width > 0 && height > 0) return { width, height }
+    }
+  }
+  if (extension === '.png' && data.length >= 24 && data.toString('ascii', 1, 4) === 'PNG') {
+    return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) }
+  }
+  if (extension === '.gif' && data.length >= 10 && data.toString('ascii', 0, 3) === 'GIF') {
+    return { width: data.readUInt16LE(6), height: data.readUInt16LE(8) }
+  }
+  if (extension === '.bmp' && data.length >= 26 && data.toString('ascii', 0, 2) === 'BM') {
+    return { width: Math.abs(data.readInt32LE(18)), height: Math.abs(data.readInt32LE(22)) }
+  }
+  if (extension === '.webp' && data.length >= 30 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') {
+    const kind = data.toString('ascii', 12, 16)
+    if (kind === 'VP8X') return { width: 1 + data.readUIntLE(24, 3), height: 1 + data.readUIntLE(27, 3) }
+    if (kind === 'VP8L' && data[20] === 0x2f) return {
+      width: 1 + (data[21] | ((data[22] & 0x3f) << 8)),
+      height: 1 + ((data[22] >> 6) | (data[23] << 2) | ((data[24] & 0x0f) << 10)),
+    }
+    if (kind === 'VP8 ' && data.toString('hex', 23, 26) === '9d012a') return { width: data.readUInt16LE(26) & 0x3fff, height: data.readUInt16LE(28) & 0x3fff }
+  }
+  if ((extension === '.jpg' || extension === '.jpeg') && data.length >= 4 && data[0] === 0xff && data[1] === 0xd8) {
+    const startOfFrame = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf])
+    let offset = 2
+    while (offset + 8 < data.length) {
+      if (data[offset] !== 0xff) { offset += 1; continue }
+      while (offset < data.length && data[offset] === 0xff) offset += 1
+      const marker = data[offset]
+      if (marker === undefined || marker === 0xd9 || marker === 0xda) break
+      if (marker >= 0xd0 && marker <= 0xd7) { offset += 1; continue }
+      if (offset + 2 >= data.length) break
+      const length = data.readUInt16BE(offset + 1)
+      if (length < 2 || offset + length >= data.length) break
+      if (startOfFrame.has(marker)) return { height: data.readUInt16BE(offset + 4), width: data.readUInt16BE(offset + 6) }
+      offset += length + 1
+    }
+  }
+  throw new Error('无法读取图片尺寸')
+}
+
+async function scanImageLibrary(library: ImageLibraryState, taskId: string, report: ImageProgressReporter, rootId?: string): Promise<ImageLibraryState> {
+  const now = new Date().toISOString()
+  const roots = library.roots.map((root) => ({ ...root }))
+  const assets = library.assets.map((asset) => ({ ...asset }))
+  const targets = roots.filter((root) => !rootId || root.id === rootId)
+  const targetIds = new Set(targets.map((root) => root.id))
+  const seenIds = new Set<string>()
+  const byPath = new Map(assets.map((asset) => [pathKey(asset.path), asset]))
+  const byIdentity = new Map<string, ImageAsset[]>()
+  const byHash = new Map<string, ImageAsset[]>()
+  for (const asset of assets) {
+    if (asset.identity) byIdentity.set(asset.identity, [...(byIdentity.get(asset.identity) ?? []), asset])
+    if (asset.hash) byHash.set(asset.hash, [...(byHash.get(asset.hash) ?? []), asset])
+  }
+  const discovered: Array<{ root: ImageLibraryRoot; filePath: string }> = []
+  for (const root of targets) {
+    try {
+      ensureImageScanActive(taskId)
+      const storedRoots = loadSnapshot().imageLibrary?.roots ?? []
+      if (!sessionImageRootPaths.has(pathKey(root.path)) && !storedRoots.some((stored) => pathKey(stored.path) === pathKey(root.path))) throw new Error('未授权的图片文件夹')
+      const rootStat = await stat(root.path, { bigint: true })
+      if (!rootStat.isDirectory()) throw new Error('不是文件夹')
+      root.identity = `${rootStat.dev.toString()}:${rootStat.ino.toString()}`
+      root.missing = false
+      root.lastScannedAt = now
+      root.updatedAt = now
+      const filePaths = await listImages(root.path, root.recursive, taskId, report)
+      discovered.push(...filePaths.map((filePath) => ({ root, filePath })))
+    } catch (error) {
+      if (error instanceof Error && error.message === 'IMAGE_SCAN_CANCELLED') throw error
+      root.missing = true
+      root.updatedAt = now
+    }
+  }
+
+  ensureImageScanActive(taskId)
+  report({ stage: 'indexing', message: `正在读取 ${discovered.length} 张图片`, completed: 0, total: discovered.length })
+  let completed = 0
+  let lastProgressAt = 0
+  const emitIndexProgress = (force = false) => {
+    const current = Date.now()
+    if (!force && current - lastProgressAt < 80 && completed < discovered.length) return
+    lastProgressAt = current
+    report({ stage: 'indexing', message: `正在建立图片索引 · ${completed}/${discovered.length}`, completed, total: discovered.length })
+  }
+  const fileInfos = (await mapConcurrent(discovered, 32, async ({ root, filePath }): Promise<RootedImageFileInfo | null> => {
+    ensureImageScanActive(taskId)
+    try {
+      const value = await stat(filePath, { bigint: true })
+      return { filePath, size: Number(value.size), mtimeMs: Number(value.mtimeMs), identity: `${value.dev.toString()}:${value.ino.toString()}`, root }
+    } catch { return null }
+  })).filter((info): info is RootedImageFileInfo => info !== null)
+
+  const claimedIds = new Set<string>()
+  const prepared = fileInfos.map((info) => {
+    let asset = byPath.get(pathKey(info.filePath))
+    if (!asset) asset = (byIdentity.get(info.identity) ?? []).find((candidate) => !claimedIds.has(candidate.id))
+    if (asset) claimedIds.add(asset.id)
+    return { info, asset }
+  })
+  const inspected = await mapConcurrent(prepared, 8, async ({ info, asset }) => {
+    ensureImageScanActive(taskId)
+    try {
+      const details = asset && asset.size === info.size && asset.mtimeMs === info.mtimeMs && asset.hash.startsWith('sample-v1:')
+        ? { size: asset.size, mtimeMs: asset.mtimeMs, width: asset.width, height: asset.height, identity: info.identity, hash: asset.hash }
+        : await inspectImage(info)
+      completed += 1
+      emitIndexProgress()
+      return { info, asset, details }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'IMAGE_SCAN_CANCELLED') throw error
+      completed += 1
+      emitIndexProgress()
+      return null
+    }
+  })
+
+  for (const item of inspected) {
+    if (!item) continue
+    const { info, details } = item
+    let { asset } = item
+    if (!asset && details.hash) {
+      const hashMatches = (byHash.get(details.hash) ?? []).filter((candidate) => !seenIds.has(candidate.id) && !existsSync(candidate.path))
+      if (hashMatches.length === 1) asset = hashMatches[0]
+    }
+    if (asset) {
+      Object.assign(asset, {
+        rootId: info.root.id, path: info.filePath, relativePath: relative(info.root.path, info.filePath), name: basename(info.filePath),
+        collectionIds: info.root.collectionId ? [...new Set([...asset.collectionIds, info.root.collectionId])] : asset.collectionIds,
+        extension: extname(info.filePath).toLowerCase(), ...details, aspectType: aspectType(details.width, details.height), missing: false, updatedAt: now,
+      })
+    } else {
+      asset = {
+        id: randomUUID(), rootId: info.root.id, collectionIds: info.root.collectionId ? [info.root.collectionId] : [], path: info.filePath, relativePath: relative(info.root.path, info.filePath), name: basename(info.filePath),
+        extension: extname(info.filePath).toLowerCase(), ...details, aspectType: aspectType(details.width, details.height),
+        missing: false, metadata: {}, createdAt: now, updatedAt: now,
+      }
+      assets.push(asset)
+      byHash.set(asset.hash, [...(byHash.get(asset.hash) ?? []), asset])
+    }
+    seenIds.add(asset.id)
+    sessionMediaPaths.add(info.filePath)
+  }
+  for (const asset of assets) {
+    if (asset.rootId && targetIds.has(asset.rootId) && !seenIds.has(asset.id)) asset.missing = true
+  }
+  emitIndexProgress(true)
+  report({ stage: 'complete', message: `已完成 · ${seenIds.size} 张图片`, completed: discovered.length, total: discovered.length })
+  return { roots, collections: library.collections, assets }
 }
 
 async function initializeTagLib() {
@@ -333,7 +653,7 @@ function createWindow(): void {
     height: 880,
     minWidth: 900,
     minHeight: 620,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#ffffff',
     icon: app.isPackaged ? undefined : fileURLToPath(new URL('../../build/icon.png', import.meta.url)),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#6f6f6f', height: 42 },
@@ -416,6 +736,98 @@ function registerIpc(): void {
   ipcMain.handle('music:read-metadata', (_event, filePath: string) => readEditableMetadata(filePath))
   ipcMain.handle('music:update-metadata', (_event, update: MusicMetadataUpdate) => updateTrackMetadata(update))
 
+  ipcMain.handle('images:pick', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择图片文件',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '图片文件', extensions: [...IMAGE_EXTENSIONS].map((value) => value.slice(1)) }],
+    })
+    if (result.canceled) return []
+    const assets: ImageAsset[] = []
+    for (const filePath of result.filePaths) {
+      try {
+        const asset = await parseImageAsset(filePath)
+        assets.push(asset)
+        sessionMediaPaths.add(asset.path)
+      } catch { /* Ignore unreadable images. */ }
+    }
+    return assets
+  })
+  ipcMain.handle('images:pick-root', async (_event, recursive: boolean) => {
+    const result = await dialog.showOpenDialog({ title: '选择图片收藏夹', properties: ['openDirectory'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    const directory = resolve(result.filePaths[0])
+    sessionImageRootPaths.add(pathKey(directory))
+    const directoryStat = await stat(directory, { bigint: true })
+    const now = new Date().toISOString()
+    return {
+      id: randomUUID(), path: directory, name: basename(directory), recursive: Boolean(recursive),
+      identity: `${directoryStat.dev.toString()}:${directoryStat.ino.toString()}`, missing: false, createdAt: now, updatedAt: now, lastScannedAt: null, collectionId: null,
+    } satisfies ImageLibraryRoot
+  })
+  const runImageScan = async (event: Electron.IpcMainInvokeEvent, taskId: string, library: ImageLibraryState, rootId?: string) => {
+    if (typeof taskId !== 'string' || !/^[a-zA-Z0-9-]{1,64}$/.test(taskId)) throw new Error('扫描任务无效')
+    cancelledImageScans.delete(taskId)
+    const report: ImageProgressReporter = (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send('images:scan-progress', { ...progress, taskId } satisfies ImageScanProgress)
+    }
+    try {
+      return await scanImageLibrary(library, taskId, report, rootId)
+    } catch (error) {
+      if (error instanceof Error && error.message === 'IMAGE_SCAN_CANCELLED') {
+        report({ stage: 'cancelled', message: '扫描已取消', completed: 0, total: null })
+        throw new Error('扫描已取消')
+      }
+      throw error
+    } finally { cancelledImageScans.delete(taskId) }
+  }
+  ipcMain.handle('images:scan', (event, taskId: string, library: ImageLibraryState, rootId?: string) => runImageScan(event, taskId, library, rootId))
+  ipcMain.handle('images:cancel-scan', (_event, taskId: string) => { if (typeof taskId === 'string') cancelledImageScans.add(taskId) })
+  ipcMain.handle('images:relocate-root', async (event, taskId: string, rootId: string, library: ImageLibraryState) => {
+    const root = library.roots.find((item) => item.id === rootId)
+    if (!root) return null
+    const result = await dialog.showOpenDialog({ title: `重新定位“${root.name}”`, properties: ['openDirectory'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    const directory = resolve(result.filePaths[0])
+    sessionImageRootPaths.add(pathKey(directory))
+    const next: ImageLibraryState = {
+      roots: library.roots.map((item) => item.id === rootId ? { ...item, path: directory, name: basename(directory), identity: '', missing: false, updatedAt: new Date().toISOString() } : item),
+      collections: library.collections,
+      assets: library.assets,
+    }
+    return runImageScan(event, taskId, next, rootId)
+  })
+  ipcMain.handle('images:relocate-asset', async (_event, assetId: string, library: ImageLibraryState) => {
+    const asset = library.assets.find((item) => item.id === assetId)
+    if (!asset) return null
+    const result = await dialog.showOpenDialog({ title: `重新定位“${asset.name}”`, properties: ['openFile'], filters: [{ name: '图片文件', extensions: [...IMAGE_EXTENSIONS].map((value) => value.slice(1)) }] })
+    if (result.canceled || !result.filePaths[0]) return null
+    try {
+      const filePath = resolve(result.filePaths[0])
+      const replacement = await parseImageAsset(filePath, asset.id)
+      sessionMediaPaths.add(filePath)
+      return {
+        roots: library.roots,
+        collections: library.collections,
+        assets: library.assets.map((item) => item.id === assetId ? {
+          ...replacement, rootId: item.rootId, collectionIds: item.collectionIds, createdAt: item.createdAt,
+        } : item),
+      } satisfies ImageLibraryState
+    } catch { return null }
+  })
+  ipcMain.handle('images:check-paths', (_event, paths: string[]) =>
+    Object.fromEntries(paths.map((filePath) => [filePath, existsSync(filePath)])),
+  )
+  ipcMain.handle('images:get-urls', (_event, paths: string[]) => {
+    const snapshot = loadSnapshot()
+    const indexedImagePaths = new Set((snapshot.imageLibrary?.assets ?? []).map((asset) => pathKey(asset.path)))
+    return Object.fromEntries(paths.flatMap((filePath) => {
+      const authorized = sessionMediaPaths.has(filePath) || indexedImagePaths.has(pathKey(filePath))
+      if (!authorized || !existsSync(filePath) || !IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())) return []
+      return [[filePath, `sylunae-media://image/${Buffer.from(filePath).toString('base64url')}`]]
+    }))
+  })
+
   ipcMain.handle('backup:export', async (_event, contents: string) => {
     const result = await dialog.showSaveDialog({
       title: '导出丝月工坊备份',
@@ -448,14 +860,15 @@ app.whenReady().then(() => {
     if (requestOrigin && requestOrigin !== rendererOrigin) return new Response('Forbidden', { status: 403 })
     const encoded = new URL(request.url).pathname.slice(1)
     const filePath = Buffer.from(encoded, 'base64url').toString('utf8')
-    if (!isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extname(filePath).toLowerCase())) {
+    const extension = extname(filePath).toLowerCase()
+    if (!isIndexedPath(filePath) || !existsSync(filePath) || (!AUDIO_EXTENSIONS.has(extension) && !IMAGE_EXTENSIONS.has(extension))) {
       return new Response('Not found', { status: 404 })
     }
     const size = statSync(filePath).size
     const headers = new Headers({
       'Accept-Ranges': 'bytes',
       'Access-Control-Allow-Origin': rendererOrigin,
-      'Content-Type': AUDIO_MIME_TYPES[extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Content-Type': AUDIO_MIME_TYPES[extension] || await imageMimeType(filePath, extension),
     })
     const range = request.headers.get('Range')
     if (!range) {

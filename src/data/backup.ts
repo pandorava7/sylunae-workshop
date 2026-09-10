@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { AppSnapshot, BackupEnvelope } from '../shared/types'
 import { normalizeThemePalettes } from '../shared/theme'
+import { normalizeImageLibrary } from '../images/library'
 
 const timestamp = z.string().min(1)
 const jsonContentSchema: z.ZodType<Record<string, unknown>> = z.lazy(() => z.object({ type: z.string().optional(), text: z.string().optional(), attrs: z.record(z.string(), z.unknown()).optional(), marks: z.array(z.unknown()).optional(), content: z.array(jsonContentSchema).optional() }).passthrough())
@@ -38,6 +39,9 @@ const todoSchema = z.object({ id: z.string(), title: z.string(), priority: z.enu
 const pomodoroSchema = z.object({ mode: z.enum(['focus', 'shortBreak', 'longBreak']), focusMinutes: z.number(), shortBreakMinutes: z.number(), longBreakMinutes: z.number(), sessionsBeforeLongBreak: z.number(), completedSessions: z.number(), secondsRemaining: z.number(), running: z.boolean(), endsAt: z.string().nullable() })
 const clipboardSchema = z.object({ id: z.string(), title: z.string(), content: z.string(), category: z.string(), createdAt: timestamp, updatedAt: timestamp })
 const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), createdAt: timestamp, updatedAt: timestamp })
+const imageRootSchema = z.object({ id: z.string(), path: z.string(), name: z.string(), recursive: z.boolean(), identity: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp, lastScannedAt: timestamp.nullable(), collectionId: z.string().nullable().optional() })
+const imageCollectionSchema = z.object({ id: z.string(), name: z.string(), createdAt: timestamp, updatedAt: timestamp })
+const imageAssetSchema = z.object({ id: z.string(), rootId: z.string().nullable().optional(), collectionIds: z.array(z.string()).optional(), path: z.string(), relativePath: z.string(), name: z.string(), extension: z.string(), size: z.number().nonnegative(), mtimeMs: z.number().nonnegative(), width: z.number().nonnegative(), height: z.number().nonnegative(), aspectType: z.enum(['landscape', 'portrait', 'square']), identity: z.string(), hash: z.string(), missing: z.boolean(), metadata: z.record(z.string(), z.unknown()).optional().default({}), createdAt: timestamp, updatedAt: timestamp })
 
 const envelopeSchema = z.object({
   format: z.literal('siyue-workshop-backup'),
@@ -56,6 +60,7 @@ const envelopeSchema = z.object({
     pomodoro: pomodoroSchema.optional().default({ mode: 'focus', focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, sessionsBeforeLongBreak: 4, completedSessions: 0, secondsRemaining: 1500, running: false, endsAt: null }),
     clipboardSnippets: z.array(clipboardSchema).optional().default([]),
     launcherLinks: z.array(launcherSchema).optional().default([]),
+    imageLibrary: z.object({ roots: z.array(imageRootSchema), collections: z.array(imageCollectionSchema).optional().default([]), assets: z.array(imageAssetSchema) }).optional().default({ roots: [], collections: [], assets: [] }),
   }),
 })
 
@@ -70,11 +75,12 @@ export function parseBackup(contents: string): BackupEnvelope {
     snapshot: {
       ...backup.snapshot,
       settings: { ...backup.snapshot.settings, themePalettes: normalizeThemePalettes(backup.snapshot.settings.themePalettes) },
+      imageLibrary: normalizeImageLibrary(backup.snapshot.imageLibrary),
     },
   } as BackupEnvelope
 }
 
 export function backupSummary(backup: BackupEnvelope): string {
   const { snapshot } = backup
-  return `笔记 ${snapshot.notes.length} 条、目标 ${snapshot.goals.length} 个、音乐索引 ${snapshot.tracks.length} 首`
+  return `笔记 ${snapshot.notes.length} 条、目标 ${snapshot.goals.length} 个、音乐索引 ${snapshot.tracks.length} 首、图片索引 ${snapshot.imageLibrary.assets.length} 张`
 }

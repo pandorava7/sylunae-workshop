@@ -83,7 +83,7 @@ export function MusicMetadataSheet({ track, onClose, onSave }: {
   }
 
   return <Sheet open onOpenChange={(open) => { if (!open && !saving) onClose() }}>
-    <SheetContent className="detail-drawer music-metadata-drawer" showCloseButton={!saving}>
+    <SheetContent className="detail-drawer metadata-drawer" showCloseButton={!saving}>
       <SheetHeader className="metadata-sheet-header">
         <SheetTitle>编辑音乐信息</SheetTitle>
         <SheetDescription>修改会直接写入原音频文件。</SheetDescription>
