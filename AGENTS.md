@@ -23,3 +23,7 @@
 - 保留丝月工坊的现有品牌视觉；主题 token 统一在 `src/styles.css` 管理，同时验证浅色、深色与 Electron 环境。
 - 功能性正文与交互文字原则上不小于 `12px`，辅助说明不小于 `11px`；`10px` 只用于不影响操作和理解的装饰性标签，禁止使用更小字号。弹窗、抽屉等次级界面也必须遵守，不通过压缩字号换取空间。
 - 受控输入不得在 `onChange` 时用 `trim`、`split`、`filter` 等操作改写用户尚未完成的文本；应保留原始输入草稿，仅在失焦或明确提交后规范化显示。
+
+# 静态资源路径
+- `public/` 下的资源会在构建后复制到 `out/renderer/`。Electron 正式版以 `file://` 加载页面时，`/resources/...` 会被解析为磁盘根路径，无法访问安装包内资源。
+- 引用 `public/resources` 下的本地静态文件必须使用相对路径 `resources/...`（不要写成 `/resources/...` 或 `public/resources/...`）；例如 `resources/white-noise/covers/window-rain.webp`。

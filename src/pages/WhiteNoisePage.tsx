@@ -43,7 +43,7 @@ function getStreamUrl(item: ResourceItem): string | null {
 
 function coverStyle(item: ResourceItem): CSSProperties {
   return item.coverPath
-    ? ({ '--noise-cover': `url("/${item.coverPath}")` } as CSSProperties)
+    ? ({ '--noise-cover': `url("${item.coverPath}")` } as CSSProperties)
     : {}
 }
 
@@ -96,7 +96,7 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
 
   const getAudioUrl = async (item: ResourceItem): Promise<string> => {
     if (window.sylunae) return window.sylunae.resources.getAudioUrl(item.id)
-    if (item.builtin) return `/${item.audioPath}`
+    if (item.builtin) return item.audioPath
     const streamUrl = getStreamUrl(item)
     if (streamUrl) return streamUrl
     throw new Error('尚未配置白噪音流媒体地址')
@@ -184,7 +184,7 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
 
     <div className={`white-noise-hero ${playing ? 'is-playing' : ''}`} style={coverStyle(selected)}>
       <div className="white-noise-glow" aria-hidden />
-      <div className="white-noise-orb">{selected.coverPath ? <img src={`/${selected.coverPath}`} alt="" /> : <SelectedIcon size={44} strokeWidth={1.25} />}</div>
+      <div className="white-noise-orb">{selected.coverPath ? <img src={selected.coverPath} alt="" /> : <SelectedIcon size={44} strokeWidth={1.25} />}</div>
       <div className="white-noise-hero-copy"><span>{selectedBusy ? '正在获取资源' : playing ? '正在播放' : !window.sylunae && canPlay(selected) ? '流式播放' : isReady(selected) ? '已在本地' : '可按需下载'}</span><h2>{selected.title}</h2><p>{selected.description}</p><div>{selected.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{selectedBusy && <div className="white-noise-hero-download"><i style={{ width: `${selectedProgress?.percent ?? 0}%` }} /><small>{selectedProgress?.message ?? '正在准备下载'}</small></div>}</div>
       <button className="white-noise-hero-play" type="button" onClick={toggleSelected} disabled={Boolean(busyId)} aria-label={selectedBusy ? `正在下载${selected.title}` : playing ? `暂停${selected.title}` : canPlay(selected) ? `播放${selected.title}` : `下载并播放${selected.title}`}>
         {selectedBusy ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : canPlay(selected) ? <Play size={21} fill="currentColor" /> : <Download size={20} />}
@@ -199,7 +199,7 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
       const active = selected.id === item.id
       const downloading = busyId === item.id
       return <button type="button" key={item.id} className={`white-noise-card ${active ? 'active' : ''}`} style={coverStyle(item)} onClick={() => active && playing ? audioRef.current?.pause() : void playItem(item)} disabled={Boolean(busyId) && !downloading} aria-pressed={active}>
-        <div className="white-noise-card-art">{item.coverPath ? <img src={`/${item.coverPath}`} alt="" /> : <Icon size={31} strokeWidth={1.35} />}<span className="white-noise-card-action">{downloading ? <LoaderCircle className="spin" size={15} /> : active && playing ? <Pause size={15} fill="currentColor" /> : canPlay(item) ? <Play size={15} fill="currentColor" /> : <Download size={14} />}</span></div>
+        <div className="white-noise-card-art">{item.coverPath ? <img src={item.coverPath} alt="" /> : <Icon size={31} strokeWidth={1.35} />}<span className="white-noise-card-action">{downloading ? <LoaderCircle className="spin" size={15} /> : active && playing ? <Pause size={15} fill="currentColor" /> : canPlay(item) ? <Play size={15} fill="currentColor" /> : <Download size={14} />}</span></div>
         <div className="white-noise-card-copy"><strong>{item.title}</strong><small>{item.description}</small><div>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}<span className="white-noise-card-state">{item.origin === 'custom' ? '本地添加' : !window.sylunae && canPlay(item) ? '流式' : item.state === 'builtin' ? '内置' : item.state === 'installed' ? '已下载' : downloading ? `${progress[item.id]?.percent ?? 0}%` : '需下载'}</span></div></div>
         {downloading && <i className="white-noise-card-download" style={{ width: `${progress[item.id]?.percent ?? 0}%` }} />}
       </button>
