@@ -10,12 +10,12 @@ import { Slider } from './ui/slider'
 import { Textarea } from './ui/textarea'
 import { ConfirmDialog } from './ConfirmDialog'
 
-const defaultImage = '/resources/fun/desk-companion/companion.png'
-const defaultPressSound = '/resources/fun/desk-companion/press.mp3'
-const defaultReleaseSound = '/resources/fun/desk-companion/release.mp3'
-const effect1PressSound = '/resources/fun/desk-companion/effect1-press.mp3'
-const effect1ReleaseSound = '/resources/fun/desk-companion/effect1-release.mp3'
-const metalPipeSound = '/resources/fun/desk-companion/metal-pipe.wav'
+const defaultImage = 'resources/fun/desk-companion/companion.png'
+const defaultPressSound = 'resources/fun/desk-companion/press.mp3'
+const defaultReleaseSound = 'resources/fun/desk-companion/release.mp3'
+const effect1PressSound = 'resources/fun/desk-companion/effect1-press.mp3'
+const effect1ReleaseSound = 'resources/fun/desk-companion/effect1-release.mp3'
+const metalPipeSound = 'resources/fun/desk-companion/metal-pipe.wav'
 
 type SoundPreset = 'duck' | 'effect1' | 'metal-pipe' | 'silent' | 'custom'
 

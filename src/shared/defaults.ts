@@ -34,15 +34,15 @@ export function createDefaultSnapshot(): AppSnapshot {
         characters: [{
           id: 'default-companion',
           name: '默认小伙伴',
-          image: '/resources/fun/desk-companion/companion.png',
+          image: 'resources/fun/desk-companion/companion.png',
           dialogues: [
             '今天也要好好照顾自己呀。',
             '累了就休息一会儿，我会在这里。',
             '又完成了一点，已经很棒啦！',
           ],
-          pressSound: '/resources/fun/desk-companion/press.mp3',
+          pressSound: 'resources/fun/desk-companion/press.mp3',
           pressSoundName: '默认按下音',
-          releaseSound: '/resources/fun/desk-companion/release.mp3',
+          releaseSound: 'resources/fun/desk-companion/release.mp3',
           releaseSoundName: '默认松开音',
         }],
       },

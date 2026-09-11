@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
-import { Album, BookHeart, BookOpen, Boxes, CalendarClock, ChevronDown, ChevronRight, CloudRain, Download, Images, Library, ListChecks, ListTodo, Menu, Music2, NotebookPen, Rss, Settings, Sparkles, Target } from 'lucide-react'
+import { Album, BookHeart, BookOpen, Boxes, CalendarClock, ChevronDown, ChevronRight, CloudRain, Download, Images, Library, ListChecks, ListTodo, Menu, MoreHorizontal, Music2, NotebookPen, Rss, Settings, Sparkles, Target } from 'lucide-react'
 import type { MusicTrack, ResourceItem, ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 
 const tools: Array<{ id: ToolId; label: string; icon: typeof Library }> = [
   { id: 'tasks', label: '任务箱', icon: ListChecks },
@@ -148,12 +149,24 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
         </button>}
       </nav>
       <div className="sidebar-footer">
-        <button className={funFeaturesOpen ? 'active' : ''} onClick={openFunFeatures} title="趣味功能" aria-label="趣味功能" aria-haspopup="dialog" aria-expanded={funFeaturesOpen}>
-          <Sparkles size={19} strokeWidth={1.7} />
-        </button>
-        <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
-          <Settings size={19} strokeWidth={1.7} />
-        </button>
+        {collapsed ? <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className={funFeaturesOpen || settingsOpen ? 'active' : ''} title="更多操作" aria-label="更多操作">
+              <MoreHorizontal size={20} strokeWidth={1.7} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="end" className="sidebar-footer-menu">
+            <DropdownMenuItem onSelect={openFunFeatures}><Sparkles />趣味功能</DropdownMenuItem>
+            <DropdownMenuItem onSelect={openSettings}><Settings />设置</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu> : <>
+          <button className={funFeaturesOpen ? 'active' : ''} onClick={openFunFeatures} title="趣味功能" aria-label="趣味功能" aria-haspopup="dialog" aria-expanded={funFeaturesOpen}>
+            <Sparkles size={19} strokeWidth={1.7} />
+          </button>
+          <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
+            <Settings size={19} strokeWidth={1.7} />
+          </button>
+        </>}
       </div>
       <div
         className="sidebar-resize-handle"

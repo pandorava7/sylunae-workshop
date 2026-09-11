@@ -29,6 +29,10 @@ class LegacySiyueDatabase extends Dexie {
 const db = new SylunaeDatabase()
 const legacyDb = new LegacySiyueDatabase()
 
+function normalizeBundledCompanionAsset(source: string): string {
+  return source.startsWith('/resources/fun/desk-companion/') ? source.slice(1) : source
+}
+
 type LegacyCompanionSettings = Partial<DeskCompanionSettings> & {
   sound?: boolean
   dialogues?: string[]
@@ -47,11 +51,11 @@ function normalizeCompanionCharacter(value: Partial<DeskCompanionCharacter>, fal
   return {
     id: typeof value.id === 'string' && value.id ? value.id : `companion-${index + 1}`,
     name: typeof value.name === 'string' && value.name.trim() ? value.name.trim() : `小伙伴 ${index + 1}`,
-    image: typeof value.image === 'string' && value.image ? value.image : fallback.image,
+    image: typeof value.image === 'string' && value.image ? normalizeBundledCompanionAsset(value.image) : fallback.image,
     dialogues,
-    pressSound: typeof value.pressSound === 'string' ? value.pressSound : fallback.pressSound,
+    pressSound: typeof value.pressSound === 'string' ? normalizeBundledCompanionAsset(value.pressSound) : fallback.pressSound,
     pressSoundName: typeof value.pressSoundName === 'string' ? value.pressSoundName : fallback.pressSoundName,
-    releaseSound: typeof value.releaseSound === 'string' ? value.releaseSound : fallback.releaseSound,
+    releaseSound: typeof value.releaseSound === 'string' ? normalizeBundledCompanionAsset(value.releaseSound) : fallback.releaseSound,
     releaseSoundName: typeof value.releaseSoundName === 'string' ? value.releaseSoundName : fallback.releaseSoundName,
   }
 }
