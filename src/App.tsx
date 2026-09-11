@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { Clock3 } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { FunFeaturesDialog } from './components/FunFeaturesDialog'
+import { DeskCompanion } from './components/DeskCompanion'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
 import type { MusicTrack, PomodoroMode, ResourceItem, ToolId, WorkspaceToolId } from './shared/types'
@@ -211,6 +212,7 @@ export default function App() {
       <div className={`save-indicator ${error ? 'error' : ''}`}>{error || (saving ? '正在保存…' : '')}</div>
     </main>
     <Suspense fallback={null}>{settingsMounted && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />}</Suspense>
+    <DeskCompanion settings={snapshot.settings.deskCompanion} />
     <FunFeaturesDialog open={funFeaturesOpen} onOpenChange={setFunFeaturesOpen} />
   </div></TooltipProvider>
 }

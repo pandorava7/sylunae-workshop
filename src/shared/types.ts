@@ -36,6 +36,25 @@ export interface HomeWallpaper {
   description: string
 }
 
+export interface DeskCompanionCharacter {
+  id: string
+  name: string
+  image: string
+  dialogues: string[]
+  pressSound: string
+  pressSoundName: string
+  releaseSound: string
+  releaseSoundName: string
+}
+
+export interface DeskCompanionSettings {
+  enabled: boolean
+  scale: number
+  dialogueMode: 'sequential' | 'random'
+  activeCharacterId: string
+  characters: DeskCompanionCharacter[]
+}
+
 export interface AppSettings {
   theme: ThemeMode
   themePalettes: ThemePalettes
@@ -50,6 +69,7 @@ export interface AppSettings {
   homeQuickActions: HomeQuickActionId[]
   weatherLocation: WeatherLocation
   weatherCache: WeatherSnapshot | null
+  deskCompanion: DeskCompanionSettings
   recentTools: WorkspaceToolId[]
   toolUsage: Partial<Record<WorkspaceToolId, string>>
   updatedAt: string

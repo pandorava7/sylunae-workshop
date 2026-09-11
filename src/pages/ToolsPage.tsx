@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   FileImage,
+  AudioLines,
   ImageDown,
   Link2,
   Pencil,
@@ -39,8 +40,9 @@ import {
 import { Textarea } from "../components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { usePersistentState } from "../lib/usePersistentState";
+import { AudioEditor } from "../components/AudioEditor";
 
-type ToolView = "home" | "clipboard" | "launcher" | "image";
+type ToolView = "home" | "clipboard" | "launcher" | "image" | "audio";
 
 const toolCards = [
   {
@@ -63,6 +65,13 @@ const toolCards = [
     description: "在本地转换 JPG、PNG、WebP，并自由控制图片质量。",
     icon: FileImage,
     accent: "green",
+  },
+  {
+    id: "audio" as const,
+    title: "音频剪辑器",
+    description: "裁剪音频片段，调整音量与淡入淡出，并在本地导出 WAV。",
+    icon: AudioLines,
+    accent: "rose",
   },
 ];
 
@@ -121,6 +130,7 @@ export function ToolsPage({
       {view === "clipboard" && <ClipboardTool />}
       {view === "launcher" && <LauncherTool />}
       {view === "image" && <ImageTool />}
+      {view === "audio" && <AudioEditor />}
     </section>
   );
 }
