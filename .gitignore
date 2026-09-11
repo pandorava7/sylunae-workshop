@@ -7,6 +7,7 @@ coverage/
 .vite/
 .electron-cache/
 .playwright-cli/
+.codex_invoice_qa/
 output/playwright/
 output/white-noise-*
 .env.local
@@ -14,4 +15,3 @@ output/white-noise-*
 resources/white-noise/source-audio/
 resources/white-noise/r2/audio/
 .DS_Store
-src/tests/
