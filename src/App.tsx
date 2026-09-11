@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { Clock3 } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
+import { FunFeaturesDialog } from './components/FunFeaturesDialog'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
 import type { MusicTrack, PomodoroMode, ResourceItem, ToolId, WorkspaceToolId } from './shared/types'
@@ -20,6 +21,7 @@ const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((mo
 
 const collapsedSidebarWidth = 70
 const minimumSidebarWidth = 220
+const maximumSidebarWidth = 480
 const sidebarCollapseThreshold = 180
 const pomodoroModeLabels: Record<PomodoroMode, string> = { focus: '专注', shortBreak: '短休息', longBreak: '长休息' }
 
@@ -32,6 +34,7 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsMounted, setSettingsMounted] = useState(false)
+  const [funFeaturesOpen, setFunFeaturesOpen] = useState(false)
   const [musicMounted, setMusicMounted] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
   const [nowPlayingAmbient, setNowPlayingAmbient] = useState<ResourceItem | null>(null)
@@ -152,7 +155,7 @@ export default function App() {
   })
   const resizeSidebar = (nextWidth: number) => {
     const collapsed = nextWidth <= sidebarCollapseThreshold
-    const width = collapsed ? undefined : Math.max(minimumSidebarWidth, nextWidth)
+    const width = collapsed ? undefined : Math.min(maximumSidebarWidth, Math.max(minimumSidebarWidth, nextWidth))
     update((state) => {
       if (state.settings.sidebarCollapsed === collapsed && (width === undefined || state.settings.sidebarWidth === width)) return state
       return {
@@ -167,6 +170,7 @@ export default function App() {
     })
   }
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
+  const openFunFeatures = () => setFunFeaturesOpen(true)
   const page = {
     home: <HomePage onOpenTool={openFromHome} />,
     tasks: <TasksPage view={taskView} onViewChange={setTaskView} initialView={homeIntent === 'todos' ? 'todos' : homeIntent === 'pomodoro' ? 'pomodoro' : 'goals'} startPomodoro={homeIntent === 'pomodoro'} />,
@@ -182,7 +186,7 @@ export default function App() {
   const pomodoroTime = `${String(Math.floor(snapshot.pomodoro.secondsRemaining / 60)).padStart(2, '0')}:${String(snapshot.pomodoro.secondsRemaining % 60).padStart(2, '0')}`
 
   return <TooltipProvider><div className="app-shell" style={{ '--sidebar-width': `${renderedSidebarWidth}px` } as CSSProperties}>
-    <Sidebar active={activeTool} taskView={taskView} collectionView={collectionView} musicSection={musicSection} musicView={musicView} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} nowPlayingAmbient={nowPlayingAmbient} onSelect={selectTool} onSelectTaskView={selectTaskView} onSelectCollectionView={selectCollectionView} onSelectMusicSection={selectMusicSection} onSelectMusicView={selectMusicView} onOpenSettings={openSettings} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
+    <Sidebar active={activeTool} taskView={taskView} collectionView={collectionView} musicSection={musicSection} musicView={musicView} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} funFeaturesOpen={funFeaturesOpen} nowPlaying={nowPlaying} nowPlayingAmbient={nowPlayingAmbient} onSelect={selectTool} onSelectTaskView={selectTaskView} onSelectCollectionView={selectCollectionView} onSelectMusicSection={selectMusicSection} onSelectMusicView={selectMusicView} onOpenSettings={openSettings} onOpenFunFeatures={openFunFeatures} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
     {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''} ${snapshot.pomodoro.running ? 'pomodoro-running' : ''}`}>
       <div className="app-titlebar-drag" />
       {snapshot.pomodoro.running && <button type="button" className="pomodoro-titlebar" onClick={openPomodoro} aria-label={`打开番茄钟：${pomodoroModeLabels[snapshot.pomodoro.mode]}中，剩余 ${pomodoroTime}`}>
@@ -207,5 +211,6 @@ export default function App() {
       <div className={`save-indicator ${error ? 'error' : ''}`}>{error || (saving ? '正在保存…' : '')}</div>
     </main>
     <Suspense fallback={null}>{settingsMounted && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />}</Suspense>
+    <FunFeaturesDialog open={funFeaturesOpen} onOpenChange={setFunFeaturesOpen} />
   </div></TooltipProvider>
 }

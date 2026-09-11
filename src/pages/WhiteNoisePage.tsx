@@ -27,6 +27,20 @@ const browserItems: ResourceItem[] = whiteNoiseCatalog.map((item) => ({
   installedSize: item.builtin ? item.size : 0,
 }))
 
+const resourceBaseUrl = (import.meta.env.MAIN_VITE_RESOURCE_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
+
+function getStreamUrl(item: ResourceItem): string | null {
+  if (!resourceBaseUrl || !item.audioPath) return null
+  try {
+    const base = new URL(`${resourceBaseUrl}/`)
+    const isLoopback = base.hostname === 'localhost' || base.hostname === '127.0.0.1' || base.hostname === '::1'
+    if (base.protocol !== 'https:' && !(base.protocol === 'http:' && isLoopback)) return null
+    return new URL(item.audioPath.replace(/^\/+/, ''), base).toString()
+  } catch {
+    return null
+  }
+}
+
 function coverStyle(item: ResourceItem): CSSProperties {
   return item.coverPath
     ? ({ '--noise-cover': `url("/${item.coverPath}")` } as CSSProperties)
@@ -50,7 +64,8 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const selected = items.find((item) => item.id === selectedId) ?? items[0]
   const SelectedIcon = noiseIcons[selected?.id] ?? Headphones
-  const readyItems = useMemo(() => items.filter(isReady), [items])
+  const canPlay = (item: ResourceItem) => isReady(item) || (!window.sylunae && Boolean(getStreamUrl(item)))
+  const readyItems = useMemo(() => items.filter(canPlay), [items])
 
   const refresh = async () => {
     if (!window.sylunae) return
@@ -82,7 +97,9 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
   const getAudioUrl = async (item: ResourceItem): Promise<string> => {
     if (window.sylunae) return window.sylunae.resources.getAudioUrl(item.id)
     if (item.builtin) return `/${item.audioPath}`
-    throw new Error('按需下载仅在桌面端可用')
+    const streamUrl = getStreamUrl(item)
+    if (streamUrl) return streamUrl
+    throw new Error('尚未配置白噪音流媒体地址')
   }
 
   const download = async (item: ResourceItem): Promise<ResourceItem> => {
@@ -99,7 +116,7 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
     setError('')
     setSelectedId(item.id)
     try {
-      const playable = isReady(item) ? item : await download(item)
+      const playable = isReady(item) || !window.sylunae ? item : await download(item)
       const url = await getAudioUrl(playable)
       const audio = audioRef.current
       if (!audio) return
@@ -161,16 +178,16 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
   const selectedBusy = busyId === selected.id
 
   return <section className="page white-noise-page">
-    <audio ref={audioRef} loop onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || selected.duration)} onError={() => { setPlaying(false); setError('音频文件无法读取，请检查资源是否完整。') }} />
+    <audio ref={audioRef} loop preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || selected.duration)} onError={() => { setPlaying(false); setError(window.sylunae ? '音频文件无法读取，请检查资源是否完整。' : '流式音频无法播放，请检查资源地址和跨域设置。') }} />
 
     <header className="page-header"><div><span className="eyebrow">AMBIENCE</span><h1>白噪音</h1><p>留一点自然的声音，让此刻慢下来</p></div><div className="white-noise-header-actions"><Button variant="outline" className="button secondary" onClick={() => void importAudio()} disabled={Boolean(busyId)}><Plus />{busyId === 'import' ? '正在添加…' : '添加白噪音'}</Button><button className="white-noise-timer" type="button" title="定时功能即将开放"><Timer size={16} /><span>定时关闭</span><small>即将开放</small></button></div></header>
 
     <div className={`white-noise-hero ${playing ? 'is-playing' : ''}`} style={coverStyle(selected)}>
       <div className="white-noise-glow" aria-hidden />
       <div className="white-noise-orb">{selected.coverPath ? <img src={`/${selected.coverPath}`} alt="" /> : <SelectedIcon size={44} strokeWidth={1.25} />}</div>
-      <div className="white-noise-hero-copy"><span>{selectedBusy ? '正在获取资源' : playing ? '正在播放' : isReady(selected) ? '已在本地' : '可按需下载'}</span><h2>{selected.title}</h2><p>{selected.description}</p><div>{selected.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{selectedBusy && <div className="white-noise-hero-download"><i style={{ width: `${selectedProgress?.percent ?? 0}%` }} /><small>{selectedProgress?.message ?? '正在准备下载'}</small></div>}</div>
-      <button className="white-noise-hero-play" type="button" onClick={toggleSelected} disabled={Boolean(busyId)} aria-label={selectedBusy ? `正在下载${selected.title}` : playing ? `暂停${selected.title}` : isReady(selected) ? `播放${selected.title}` : `下载并播放${selected.title}`}>
-        {selectedBusy ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : isReady(selected) ? <Play size={21} fill="currentColor" /> : <Download size={20} />}
+      <div className="white-noise-hero-copy"><span>{selectedBusy ? '正在获取资源' : playing ? '正在播放' : !window.sylunae && canPlay(selected) ? '流式播放' : isReady(selected) ? '已在本地' : '可按需下载'}</span><h2>{selected.title}</h2><p>{selected.description}</p><div>{selected.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{selectedBusy && <div className="white-noise-hero-download"><i style={{ width: `${selectedProgress?.percent ?? 0}%` }} /><small>{selectedProgress?.message ?? '正在准备下载'}</small></div>}</div>
+      <button className="white-noise-hero-play" type="button" onClick={toggleSelected} disabled={Boolean(busyId)} aria-label={selectedBusy ? `正在下载${selected.title}` : playing ? `暂停${selected.title}` : canPlay(selected) ? `播放${selected.title}` : `下载并播放${selected.title}`}>
+        {selectedBusy ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : canPlay(selected) ? <Play size={21} fill="currentColor" /> : <Download size={20} />}
       </button>
       <div className="ambient-lines" aria-hidden>{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ '--line-index': index } as CSSProperties} />)}</div>
     </div>
@@ -182,16 +199,16 @@ export function WhiteNoisePage({ onNowPlayingChange }: { onNowPlayingChange: (it
       const active = selected.id === item.id
       const downloading = busyId === item.id
       return <button type="button" key={item.id} className={`white-noise-card ${active ? 'active' : ''}`} style={coverStyle(item)} onClick={() => active && playing ? audioRef.current?.pause() : void playItem(item)} disabled={Boolean(busyId) && !downloading} aria-pressed={active}>
-        <div className="white-noise-card-art">{item.coverPath ? <img src={`/${item.coverPath}`} alt="" /> : <Icon size={31} strokeWidth={1.35} />}<span className="white-noise-card-action">{downloading ? <LoaderCircle className="spin" size={15} /> : active && playing ? <Pause size={15} fill="currentColor" /> : isReady(item) ? <Play size={15} fill="currentColor" /> : <Download size={14} />}</span></div>
-        <div className="white-noise-card-copy"><strong>{item.title}</strong><small>{item.description}</small><div>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}<span className="white-noise-card-state">{item.origin === 'custom' ? '本地添加' : item.state === 'builtin' ? '内置' : item.state === 'installed' ? '已下载' : downloading ? `${progress[item.id]?.percent ?? 0}%` : '需下载'}</span></div></div>
+        <div className="white-noise-card-art">{item.coverPath ? <img src={`/${item.coverPath}`} alt="" /> : <Icon size={31} strokeWidth={1.35} />}<span className="white-noise-card-action">{downloading ? <LoaderCircle className="spin" size={15} /> : active && playing ? <Pause size={15} fill="currentColor" /> : canPlay(item) ? <Play size={15} fill="currentColor" /> : <Download size={14} />}</span></div>
+        <div className="white-noise-card-copy"><strong>{item.title}</strong><small>{item.description}</small><div>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}<span className="white-noise-card-state">{item.origin === 'custom' ? '本地添加' : !window.sylunae && canPlay(item) ? '流式' : item.state === 'builtin' ? '内置' : item.state === 'installed' ? '已下载' : downloading ? `${progress[item.id]?.percent ?? 0}%` : '需下载'}</span></div></div>
         {downloading && <i className="white-noise-card-download" style={{ width: `${progress[item.id]?.percent ?? 0}%` }} />}
       </button>
     })}</div>
 
     <div className="player-bar white-noise-player visible">
-      <div className="player-track white-noise-player-track"><div className="tiny-cover large">{selected.coverPath ? <img src={`/${selected.coverPath}`} alt="" /> : <SelectedIcon size={18} />}</div><div><strong>{selected.title}</strong><span>{isReady(selected) ? '环境白噪音 · 循环播放' : '尚未下载'}</span></div></div>
-      <div className="player-center"><div className="player-controls"><button onClick={() => move(-1)} aria-label="上一个本地白噪音"><SkipBack size={18} fill="currentColor" /></button><button className="play-main" onClick={toggleSelected} disabled={Boolean(busyId)} aria-label={playing ? '暂停' : isReady(selected) ? '播放' : '下载并播放'}>{selectedBusy ? <LoaderCircle className="spin" size={18} /> : playing ? <Pause size={18} fill="currentColor" /> : isReady(selected) ? <Play size={18} fill="currentColor" /> : <Download size={17} />}</button><button onClick={() => move(1)} aria-label="下一个本地白噪音"><SkipForward size={18} fill="currentColor" /></button></div>
-        <div className="progress-control"><span>{formatDuration(position)}</span><Slider min={0} max={Math.max(duration, 1)} step={1} value={[Math.min(position, duration || 0)]} onValueChange={([value]) => { if (audioRef.current) audioRef.current.currentTime = value }} disabled={!isReady(selected)} aria-label="播放进度" /><span>{formatDuration(duration)}</span></div></div>
+      <div className="player-track white-noise-player-track"><div className="tiny-cover large">{selected.coverPath ? <img src={`/${selected.coverPath}`} alt="" /> : <SelectedIcon size={18} />}</div><div><strong>{selected.title}</strong><span>{canPlay(selected) ? `环境白噪音 · ${!window.sylunae ? '流式' : '循环'}播放` : '尚未下载'}</span></div></div>
+      <div className="player-center"><div className="player-controls"><button onClick={() => move(-1)} aria-label="上一个可播放白噪音"><SkipBack size={18} fill="currentColor" /></button><button className="play-main" onClick={toggleSelected} disabled={Boolean(busyId)} aria-label={playing ? '暂停' : canPlay(selected) ? '播放' : '下载并播放'}>{selectedBusy ? <LoaderCircle className="spin" size={18} /> : playing ? <Pause size={18} fill="currentColor" /> : canPlay(selected) ? <Play size={18} fill="currentColor" /> : <Download size={17} />}</button><button onClick={() => move(1)} aria-label="下一个可播放白噪音"><SkipForward size={18} fill="currentColor" /></button></div>
+        <div className="progress-control"><span>{formatDuration(position)}</span><Slider min={0} max={Math.max(duration, 1)} step={1} value={[Math.min(position, duration || 0)]} onValueChange={([value]) => { if (audioRef.current) audioRef.current.currentTime = value }} disabled={!canPlay(selected)} aria-label="播放进度" /><span>{formatDuration(duration)}</span></div></div>
       <div className="volume-control"><Volume2 size={17} /><Slider min={0} max={1} step={0.01} value={[volume]} onValueChange={([value]) => setVolume(value)} aria-label="白噪音音量" /></div>
     </div>
   </section>

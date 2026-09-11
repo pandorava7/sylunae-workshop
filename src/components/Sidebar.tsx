@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
-import { Album, BookHeart, BookOpen, Boxes, CalendarClock, ChevronDown, ChevronRight, CloudRain, Download, Images, Library, ListChecks, ListTodo, Menu, Music2, NotebookPen, Rss, Settings, Target } from 'lucide-react'
+import { Album, BookHeart, BookOpen, Boxes, CalendarClock, ChevronDown, ChevronRight, CloudRain, Download, Images, Library, ListChecks, ListTodo, Menu, Music2, NotebookPen, Rss, Settings, Sparkles, Target } from 'lucide-react'
 import type { MusicTrack, ResourceItem, ToolId } from '../shared/types'
 import { BrandMark } from './Icons'
 
@@ -34,7 +34,7 @@ function downloadDesktopApp() {
     .catch(() => openExternal('https://github.com/pandorava7/sylunae-workshop/releases/latest'))
 }
 
-export function Sidebar({ active, taskView, collectionView, musicSection, musicView, collapsed, width, mobileOpen, settingsOpen, nowPlaying, nowPlayingAmbient, onSelect, onSelectTaskView, onSelectCollectionView, onSelectMusicSection, onSelectMusicView, onOpenSettings, onResize, onOpen, onClose }: {
+export function Sidebar({ active, taskView, collectionView, musicSection, musicView, collapsed, width, mobileOpen, settingsOpen, funFeaturesOpen, nowPlaying, nowPlayingAmbient, onSelect, onSelectTaskView, onSelectCollectionView, onSelectMusicSection, onSelectMusicView, onOpenSettings, onOpenFunFeatures, onResize, onOpen, onClose }: {
   active: ToolId
   taskView: 'goals' | 'todos' | 'pomodoro' | 'countdown'
   collectionView: 'bangumi' | 'images' | 'rss'
@@ -44,6 +44,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
   width: number
   mobileOpen: boolean
   settingsOpen: boolean
+  funFeaturesOpen: boolean
   nowPlaying: MusicTrack | null
   nowPlayingAmbient: ResourceItem | null
   onSelect: (tool: ToolId) => void
@@ -52,6 +53,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
   onSelectMusicSection: (section: 'library' | 'white-noise') => void
   onSelectMusicView: (view: 'tracks' | 'albums') => void
   onOpenSettings: () => void
+  onOpenFunFeatures: () => void
   onResize: (width: number) => void
   onOpen: () => void
   onClose: () => void
@@ -63,6 +65,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
 
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
   const openSettings = () => { onOpenSettings(); onClose() }
+  const openFunFeatures = () => { onOpenFunFeatures(); onClose() }
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     if (window.matchMedia('(max-width: 760px)').matches) return
     resizeStart.current = { x: event.clientX, width }
@@ -145,8 +148,11 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
         </button>}
       </nav>
       <div className="sidebar-footer">
-        <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
-          <Settings size={19} strokeWidth={1.7} /><span>设置</span>
+        <button className={funFeaturesOpen ? 'active' : ''} onClick={openFunFeatures} title="趣味功能" aria-label="趣味功能" aria-haspopup="dialog" aria-expanded={funFeaturesOpen}>
+          <Sparkles size={19} strokeWidth={1.7} />
+        </button>
+        <button className={settingsOpen ? 'active' : ''} onClick={openSettings} title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}>
+          <Settings size={19} strokeWidth={1.7} />
         </button>
       </div>
       <div
