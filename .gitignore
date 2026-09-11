@@ -12,6 +12,4 @@ output/playwright/
 output/white-noise-*
 .env.local
 .env.*.local
-resources/white-noise/source-audio/
-resources/white-noise/r2/audio/
 .DS_Store

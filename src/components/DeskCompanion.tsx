@@ -4,12 +4,15 @@ import type { DeskCompanionSettings } from '../shared/types'
 const POSITION_KEY = 'fun.deskCompanion.position'
 const BUBBLE_DURATION = 5_000
 const MOVE_THRESHOLD = 4
+const LONG_PRESS_DELAY = 650
+const MULTI_TAP_WINDOW = 200
 
 type HorizontalAnchor = 'left' | 'right' | 'free'
 type VerticalAnchor = 'top' | 'bottom' | 'free'
 interface Position { x: number; y: number; horizontal: HorizontalAnchor; vertical: VerticalAnchor }
 interface DragState { pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean }
 interface SoundBuffers { press: AudioBuffer | null; release: AudioBuffer | null }
+type Reaction = 'excited' | 'shy' | 'settling' | null
 
 function widgetSize(scale: number) { return Math.round(250 * scale) }
 
@@ -64,6 +67,8 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
   const [pressed, setPressed] = useState(false)
   const [lineIndex, setLineIndex] = useState(0)
   const [bubbleOpen, setBubbleOpen] = useState(false)
+  const [transientLine, setTransientLine] = useState<string | null>(null)
+  const [reaction, setReaction] = useState<Reaction>(null)
   const drag = useRef<DragState | null>(null)
   const bubbleTimer = useRef<number | null>(null)
   const wasEnabled = useRef(false)
@@ -72,6 +77,11 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
   const soundBuffers = useRef<SoundBuffers>({ press: null, release: null })
   const playingSources = useRef(new Set<AudioBufferSourceNode>())
   const pressEndsAt = useRef(0)
+  const longPressTimer = useRef<number | null>(null)
+  const reactionTimer = useRef<number | null>(null)
+  const lastTapAt = useRef(0)
+  const tapCount = useRef(0)
+  const longPressed = useRef(false)
 
   useEffect(() => {
     const context = new AudioContext({ latencyHint: 'interactive' })
@@ -129,8 +139,15 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
     startSound('release', Math.max(context.currentTime, pressEndsAt.current))
   }
 
+  const openBubble = (duration = BUBBLE_DURATION) => {
+    setBubbleOpen(true)
+    if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current)
+    bubbleTimer.current = window.setTimeout(() => setBubbleOpen(false), duration)
+  }
+
   const showNextLine = () => {
     if (!character?.dialogues.length) return
+    setTransientLine(null)
     setLineIndex((current) => {
       if (!hasShownLine.current) {
         hasShownLine.current = true
@@ -141,9 +158,15 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
       }
       return (current + 1) % character.dialogues.length
     })
-    setBubbleOpen(true)
-    if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current)
-    bubbleTimer.current = window.setTimeout(() => setBubbleOpen(false), BUBBLE_DURATION)
+    openBubble()
+  }
+
+  const showReaction = (nextReaction: Exclude<Reaction, null>, message: string) => {
+    setTransientLine(message)
+    setReaction(nextReaction)
+    openBubble(3_200)
+    if (reactionTimer.current) window.clearTimeout(reactionTimer.current)
+    reactionTimer.current = window.setTimeout(() => setReaction(null), 900)
   }
 
   useEffect(() => {
@@ -159,6 +182,8 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
     hasShownLine.current = false
     setLineIndex(0)
     setBubbleOpen(false)
+    setTransientLine(null)
+    setReaction(null)
   }, [character?.id])
 
   useEffect(() => {
@@ -168,13 +193,25 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
     return () => window.removeEventListener('resize', onResize)
   }, [size])
 
-  useEffect(() => () => { if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current) }, [])
+  useEffect(() => () => {
+    if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current)
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    if (reactionTimer.current) window.clearTimeout(reactionTimer.current)
+  }, [])
 
   if (!settings.enabled || !character) return null
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
     drag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y, moved: false }
+    longPressed.current = false
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = window.setTimeout(() => {
+      if (drag.current && !drag.current.moved) {
+        longPressed.current = true
+        showReaction('shy', '这样一直看着我……会有点不好意思的。')
+      }
+    }, LONG_PRESS_DELAY)
     setPressed(true)
     playPress()
   }
@@ -183,9 +220,19 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
     if (!drag.current || drag.current.pointerId !== event.pointerId) return
     const completed = drag.current
     drag.current = null
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
     setPressed(false)
     playReleaseAfterPress()
+    if (longPressed.current) return
     if (!completed.moved) {
+      const now = performance.now()
+      tapCount.current = now - lastTapAt.current <= MULTI_TAP_WINDOW ? tapCount.current + 1 : 1
+      lastTapAt.current = now
+      if (tapCount.current >= 5) {
+        tapCount.current = 0
+        showReaction('excited', '头脑风暴！') 
+        return
+      }
       showNextLine()
       return
     }
@@ -204,15 +251,17 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
       window.localStorage.setItem(POSITION_KEY, JSON.stringify(snapped))
       return snapped
     })
+    showReaction('settling', '稳稳落地！')
   }
 
   const side = position.x + size / 2 < window.innerWidth / 2 ? 'left' : 'right'
-  const line = character.dialogues[lineIndex % Math.max(1, character.dialogues.length)]
+  const line = transientLine ?? character.dialogues[lineIndex % Math.max(1, character.dialogues.length)]
 
   return <aside
     className="desk-companion"
     data-side={side}
     data-pressed={pressed || undefined}
+    data-reaction={reaction || undefined}
     style={{ left: position.x, top: position.y, width: size, height: size, '--companion-u': `${size / 1026}px` } as CSSProperties}
     aria-label="桌面小伙伴"
   >
@@ -226,7 +275,10 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
         if (!current || current.pointerId !== event.pointerId) return
         const dx = event.clientX - current.startX
         const dy = event.clientY - current.startY
-        if (Math.hypot(dx, dy) >= MOVE_THRESHOLD) current.moved = true
+        if (Math.hypot(dx, dy) >= MOVE_THRESHOLD) {
+          current.moved = true
+          if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+        }
         setPosition(clampPosition({ x: current.originX + dx, y: current.originY + dy, horizontal: 'free', vertical: 'free' }, size))
       }}
       onPointerUp={finishDrag}

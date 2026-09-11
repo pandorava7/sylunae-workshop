@@ -350,19 +350,43 @@ export interface Milestone {
   title: string
   dueDate: string
   completed: boolean
+  progress?: number
+  weight?: number
   createdAt: string
   updatedAt: string
 }
 
-export type GoalStatus = 'active' | 'completed' | 'archived'
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'archived'
+export type GoalProgressMode = 'manual' | 'metric' | 'milestones' | 'subgoals'
+export type GoalReviewCadence = 'weekly' | 'monthly' | 'none'
+
+export interface GoalCheckIn {
+  id: string
+  progress: number
+  confidence: number
+  note: string
+  nextStep: string
+  createdAt: string
+}
 
 export interface Goal {
   id: string
   title: string
   description: string
+  motivation?: string
   status: GoalStatus
+  parentId?: string | null
   startDate: string
   dueDate: string
+  progressMode?: GoalProgressMode
+  manualProgress?: number
+  metricStart?: number
+  metricCurrent?: number
+  metricTarget?: number
+  metricUnit?: string
+  reviewCadence?: GoalReviewCadence
+  nextReviewDate?: string
+  checkIns?: GoalCheckIn[]
   milestones: Milestone[]
   createdAt: string
   updatedAt: string
@@ -373,9 +397,11 @@ export type TodoPriority = 'low' | 'medium' | 'high'
 export interface QuickTodo {
   id: string
   title: string
+  goalId?: string
   priority: TodoPriority
   dueDate: string
   completed: boolean
+  completedAt?: string | null
   createdAt: string
   updatedAt: string
 }

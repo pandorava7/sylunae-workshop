@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ImagePlus, MessageCircleMore, Play, Plus, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import type { DeskCompanionCharacter } from '../shared/types'
+import { DESK_COMPANION_PRESETS, createDeskCompanionPreset } from '../shared/deskCompanionPresets'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
@@ -52,6 +53,10 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
   useEffect(() => () => { if (feedbackTimer.current) window.clearTimeout(feedbackTimer.current) }, [])
 
   if (!companion || !activeCharacter) return null
+  const availableCharacters = [
+    ...companion.characters,
+    ...DESK_COMPANION_PRESETS.filter((preset) => !companion.characters.some((character) => character.id === preset.id)),
+  ]
 
   const patchCompanion = (patch: Partial<typeof companion>) => update((state) => ({
     ...state,
@@ -89,6 +94,17 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
       releaseSound: '',
       releaseSoundName: '',
     }
+    patchCompanion({ characters: [...companion.characters, character], activeCharacterId: character.id })
+  }
+
+  const selectCharacter = (characterId: string) => {
+    const existing = companion.characters.find((item) => item.id === characterId)
+    if (existing) {
+      patchCompanion({ activeCharacterId: existing.id })
+      return
+    }
+    const character = createDeskCompanionPreset(characterId)
+    if (!character || companion.characters.length >= 12) return
     patchCompanion({ characters: [...companion.characters, character], activeCharacterId: character.id })
   }
 
@@ -153,9 +169,9 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
 
           <div className="fun-feature-settings">
             <div className="fun-character-toolbar">
-              <Select value={activeCharacter.id} onValueChange={(activeCharacterId) => patchCompanion({ activeCharacterId })}>
+              <Select value={activeCharacter.id} onValueChange={selectCharacter}>
                 <SelectTrigger aria-label="选择小伙伴"><SelectValue /></SelectTrigger>
-                <SelectContent>{companion.characters.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{availableCharacters.map((item) => <SelectItem key={item.id} value={item.id} disabled={companion.characters.length >= 12 && !companion.characters.some((character) => character.id === item.id)}>{item.name}</SelectItem>)}</SelectContent>
               </Select>
               <Button type="button" variant="outline" onClick={addCharacter}><Plus />新增角色</Button>
               <Button type="button" variant="destructive" size="icon" disabled={companion.characters.length <= 1} aria-label="删除当前角色" onClick={() => setDeleteOpen(true)}><Trash2 /></Button>
@@ -198,7 +214,7 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
             <div className="fun-feature-assets">
               <div className="fun-feature-asset-row">
                 <span className="fun-feature-asset-icon"><ImagePlus size={16} /></span>
-                <div><strong>小人图片</strong><small>{activeCharacter.image === defaultImage ? '默认小伙伴' : '自定义图片'}</small></div>
+                <div><strong>小人图片</strong><small>{DESK_COMPANION_PRESETS.some((preset) => preset.image === activeCharacter.image) ? '预设角色图片' : '自定义图片'}</small></div>
                 <input ref={characterInputRef} type="file" accept="image/png,image/webp,image/gif,image/jpeg" hidden onChange={(event) => { void uploadCharacter(event.target.files?.[0]); event.currentTarget.value = '' }} />
                 <Button type="button" variant="outline" size="sm" onClick={() => characterInputRef.current?.click()}><Upload />上传</Button>
                 <Button type="button" variant="ghost" size="icon-sm" aria-label="恢复默认小人" title="恢复默认" onClick={() => patchCharacter({ image: defaultImage })}><RotateCcw /></Button>

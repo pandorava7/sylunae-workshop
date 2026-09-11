@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { CalendarClock, Check, Circle, Clock3, ListTodo, Pause, Play, Plus, RotateCcw, Settings2, Target, TimerReset, Trash2 } from 'lucide-react'
+import confetti, { type Options as ConfettiOptions } from 'canvas-confetti'
+import { CalendarClock, Check, Circle, Clock3, History, ListTodo, Pause, Play, Plus, RotateCcw, Settings2, Sparkles, Target, TimerReset, Trash2, TrendingUp } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
-import type { PomodoroMode, QuickTodo, TodoPriority } from '../shared/types'
+import type { PomodoroMode, QuickTodo } from '../shared/types'
 import { newId, nowIso } from '../utils'
 import { GoalsPage } from './GoalsPage'
 import { Button } from '../components/ui/button'
@@ -19,6 +20,8 @@ const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
   pomodoro: { label: '番茄钟', icon: Clock3 },
   countdown: { label: '倒数日', icon: CalendarClock },
 }
+
+const todoConfetti = confetti.create(undefined, { resize: true, useWorker: false })
 
 export function TasksPage({ initialView = 'goals', startPomodoro = false, view, onViewChange }: { initialView?: TaskView; startPomodoro?: boolean; view?: TaskView; onViewChange?: (view: TaskView) => void }) {
   const [storedView, setStoredView] = usePersistentState<TaskView>('navigation.tasksView', initialView)
@@ -42,37 +45,95 @@ export function TasksPage({ initialView = 'goals', startPomodoro = false, view, 
 function TodoPanel() {
   const { snapshot, update } = useAppStore()
   const todos = snapshot?.todos ?? []
+  const goals = snapshot?.goals ?? []
   const [draft, setDraft] = useState('')
-  const [priority, setPriority] = useState<TodoPriority>('medium')
-  const [dueDate, setDueDate] = useState('')
-  const [filter, setFilter] = usePersistentState<'open' | 'done' | 'all'>('navigation.todoFilter', 'open')
-  const visible = useMemo(() => todos.filter((todo) => filter === 'all' || (filter === 'done' ? todo.completed : !todo.completed)), [todos, filter])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const visible = useMemo(() => [...todos].sort((a, b) => Number(a.completed) - Number(b.completed) || (a.completed ? (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt) : b.createdAt.localeCompare(a.createdAt))), [todos])
+  useEffect(() => {
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 50)
+    return () => window.clearTimeout(timer)
+  }, [])
   const add = () => {
     const title = draft.trim()
     if (!title) return
     const now = nowIso()
-    const todo: QuickTodo = { id: newId(), title, priority, dueDate, completed: false, createdAt: now, updatedAt: now }
+    const todo: QuickTodo = { id: newId(), title, priority: 'medium', dueDate: '', completed: false, completedAt: null, createdAt: now, updatedAt: now }
     update((state) => ({ ...state, todos: [todo, ...state.todos] }))
-    setDraft(''); setDueDate('')
+    setDraft('')
   }
   const patch = (id: string, value: Partial<QuickTodo>) => update((state) => ({ ...state, todos: state.todos.map((todo) => todo.id === id ? { ...todo, ...value, updatedAt: nowIso() } : todo) }))
   const remove = (id: string) => update((state) => ({ ...state, todos: state.todos.filter((todo) => todo.id !== id) }))
-  const openCount = todos.filter((todo) => !todo.completed).length
-  return <div className="task-panel">
-    <div className="panel-heading"><div><h2>快速待办</h2><p>{openCount ? `还有 ${openCount} 件小事等待完成` : '今天的待办已经清空'}</p></div></div>
-    <div className="todo-composer">
-      <Input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') add() }} placeholder="写下一件要做的小事…" aria-label="待办内容" />
-      <Select value={priority} onValueChange={(value) => setPriority(value as TodoPriority)}><SelectTrigger aria-label="优先级"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="high">高优先级</SelectItem><SelectItem value="medium">普通</SelectItem><SelectItem value="low">低优先级</SelectItem></SelectContent></Select>
-      <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-label="截止日期" />
-      <Button className="button primary" onClick={add} disabled={!draft.trim()}><Plus size={17} />添加</Button>
-    </div>
-    <div className="todo-filter"><Tabs value={filter} onValueChange={(value) => setFilter(value as typeof filter)}><TabsList className="segmented"><TabsTrigger value="open">待完成</TabsTrigger><TabsTrigger value="done">已完成</TabsTrigger><TabsTrigger value="all">全部</TabsTrigger></TabsList></Tabs><span>{todos.filter((todo) => todo.completed).length} / {todos.length} 已完成</span></div>
-    <div className="todo-list">{visible.length ? visible.map((todo) => <div className={`todo-row ${todo.completed ? 'completed' : ''}`} key={todo.id}>
-      <button className="todo-check" onClick={() => patch(todo.id, { completed: !todo.completed })} aria-label={todo.completed ? '恢复待办' : '完成待办'}>{todo.completed ? <Check size={16} /> : <Circle size={18} />}</button>
-      <div className="todo-copy"><input value={todo.title} onChange={(event) => patch(todo.id, { title: event.target.value })} aria-label="编辑待办" /><span><i className={`priority-dot ${todo.priority}`} />{todo.priority === 'high' ? '高优先级' : todo.priority === 'low' ? '低优先级' : '普通'}{todo.dueDate && <> · {todo.dueDate}</>}</span></div>
-      <button className="icon-button danger" onClick={() => remove(todo.id)} aria-label="删除待办"><Trash2 size={16} /></button>
-    </div>) : <div className="compact-empty"><ListTodo size={28} /><strong>{filter === 'done' ? '还没有已完成的待办' : '这里很清爽'}</strong><span>{filter === 'open' ? '随手记下一件小事，然后开始行动。' : '切换筛选查看其他待办。'}</span></div>}</div>
+  const toggle = (todo: QuickTodo, target: HTMLButtonElement) => {
+    if (todo.completed) { patch(todo.id, { completed: false, completedAt: null }); return }
+    const rect = target.getBoundingClientRect()
+    patch(todo.id, { completed: true, completedAt: nowIso() })
+    launchTodoConfetti(rect)
+  }
+  const now = Date.now()
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+  const sevenDaysAgo = now - 7 * 86400000
+  const openTodos = todos.filter((todo) => !todo.completed)
+  const completedToday = todos.filter((todo) => todo.completed && new Date(todo.completedAt ?? todo.updatedAt).getTime() >= startOfToday.getTime()).length
+  const completedRecently = todos.filter((todo) => todo.completed && new Date(todo.completedAt ?? todo.updatedAt).getTime() >= sevenDaysAgo)
+  const timedCompleted = completedRecently.filter((todo) => todo.completedAt)
+  const averageHours = timedCompleted.length ? timedCompleted.reduce((sum, todo) => sum + Math.max(0, new Date(todo.completedAt!).getTime() - new Date(todo.createdAt).getTime()), 0) / timedCompleted.length / 3600000 : 0
+  const oldest = [...openTodos].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+  const oldestDays = oldest ? Math.max(0, Math.floor((now - new Date(oldest.createdAt).getTime()) / 86400000)) : 0
+  const insight = !openTodos.length ? '待办清单清理完毕，好棒好棒！' : oldestDays >= 7 ? `“${oldest.title}”已经停留 ${oldestDays} 天，也许可以把它拆小或删掉。` : openTodos.length > 8 ? '清单有点拥挤，先选一件两分钟内能完成的小事吧。' : '清单保持轻盈，完成一件就会为下一件腾出空间。'
+  return <div className="task-panel todo-panel">
+    <div className="panel-heading"><div><h2>快速待办</h2><p>{openTodos.length ? `${openTodos.length} 件小事，想到就记下，做完就划掉` : '今天的清单已经清空'}</p></div><span className="todo-completion-count"><Check size={14} />今天完成 {completedToday}</span></div>
+    <div className="todo-quick-composer"><Plus size={19} /><Input ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) add() }} placeholder="现在要做什么？按 Enter 添加" aria-label="快速添加待办" /><kbd>Enter</kbd></div>
+    <div className="todo-list quick-list">{visible.length ? visible.map((todo) => <div className={`todo-row ${todo.completed ? 'completed' : ''}`} key={todo.id}>
+      <button className="todo-check" onClick={(event) => toggle(todo, event.currentTarget)} aria-label={todo.completed ? '恢复待办' : '完成待办'}>{todo.completed ? <Check size={16} /> : <Circle size={18} />}</button>
+      <div className="todo-copy"><input value={todo.title} onChange={(event) => patch(todo.id, { title: event.target.value })} aria-label="编辑待办" /><div className="todo-meta-line"><span className="todo-time-line"><Clock3 size={11} />{todo.completed && todo.completedAt ? `完成于 ${formatTodoTimestamp(todo.completedAt)} · 用时 ${formatTodoDuration(Math.max(0, (new Date(todo.completedAt).getTime() - new Date(todo.createdAt).getTime()) / 3600000))}` : `创建于 ${formatTodoTimestamp(todo.createdAt)} · 已存留 ${formatTodoDuration(Math.max(0, (Date.now() - new Date(todo.createdAt).getTime()) / 3600000))}`}</span>{todo.goalId && <span className="todo-origin-line"><Target size={11} />来自目标：{goals.find((goal) => goal.id === todo.goalId)?.title ?? '已删除的目标'}</span>}</div></div>
+      <button className="icon-button danger todo-remove" onClick={() => remove(todo.id)} aria-label="删除待办"><Trash2 size={16} /></button>
+    </div>) : <div className="compact-empty"><ListTodo size={28} /><strong>这里很清爽</strong><span>输入一件小事，按下 Enter 就记好了。</span></div>}</div>
+    <section className="todo-review" aria-label="待办复盘"><div className="todo-review-heading"><div><Sparkles size={17} /><div><strong>清单复盘</strong><small>了解自己的节奏</small></div></div></div><div className="todo-review-grid"><TodoInsight icon={<Check />} value={String(completedToday)} label="今天完成" /><TodoInsight icon={<TrendingUp />} value={String(completedRecently.length)} label="近 7 天完成" /><TodoInsight icon={<History />} value={timedCompleted.length ? formatTodoDuration(averageHours) : '—'} label="平均完成用时" /><TodoInsight icon={<Clock3 />} value={oldest ? (oldestDays ? `${oldestDays} 天` : '今天') : '—'} label="最长等待" /></div><p>{insight}</p></section>
   </div>
+}
+
+function launchTodoConfetti(source: DOMRect) {
+  const origin = {
+    x: Math.min(0.98, Math.max(0.02, (source.left + source.width / 2) / window.innerWidth)),
+    y: Math.min(0.96, Math.max(0.04, (source.top + source.height / 2) / window.innerHeight)),
+  }
+  const base: ConfettiOptions = {
+    colors: ['#ef476f', '#ffd166', '#06d6a0', '#118ab2', '#7b61ff', '#f78c6b'],
+    disableForReducedMotion: true,
+    angle: 90,
+    gravity: 1.08,
+    decay: 0.91,
+    ticks: 170,
+    scalar: 0.9,
+    spread: 54,
+    startVelocity: 38,
+    origin,
+    zIndex: 130,
+  }
+  void todoConfetti({ ...base, particleCount: 44 })
+  window.setTimeout(() => void todoConfetti({ ...base, particleCount: 18, spread: 68, startVelocity: 30 }), 90)
+}
+
+function formatTodoDuration(hours: number): string {
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} 分钟`
+  if (hours < 24) return `${Math.round(hours)} 小时`
+  return `${Math.round(hours / 24)} 天`
+}
+
+function formatTodoTimestamp(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '未知时间'
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfYesterday = startOfToday - 86400000
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (date.getTime() >= startOfToday) return `今天 ${time}`
+  if (date.getTime() >= startOfYesterday) return `昨天 ${time}`
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${time}`
+}
+
+function TodoInsight({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return <div><span>{icon}</span><strong>{value}</strong><small>{label}</small></div>
 }
 
 const modeLabels: Record<PomodoroMode, string> = { focus: '专注', shortBreak: '短休息', longBreak: '长休息' }

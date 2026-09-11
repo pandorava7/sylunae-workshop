@@ -4,6 +4,7 @@ import type { AppSnapshot, DeskCompanionCharacter, DeskCompanionSettings, HomeQu
 import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
 import { normalizeImageLibrary } from '../images/library'
+import { normalizeGoal } from '../goals/tracking'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
 interface BangumiCoverRow { url: string; blob: Blob; cachedAt: string }
@@ -103,9 +104,12 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     releaseSound: typeof companion?.releaseSound === 'string' ? companion.releaseSound : companion?.sound === false ? '' : undefined,
     releaseSoundName: typeof companion?.releaseSoundName === 'string' ? companion.releaseSoundName : companion?.sound === false ? '' : undefined,
   }
-  const characters = Array.isArray(companion?.characters) && companion.characters.length
+  const characters = (Array.isArray(companion?.characters) && companion.characters.length
     ? companion.characters.slice(0, 12).map((character, index) => normalizeCompanionCharacter(character, defaultCharacter, index))
-    : [normalizeCompanionCharacter(legacyCharacter, defaultCharacter, 0)]
+    : [normalizeCompanionCharacter(legacyCharacter, defaultCharacter, 0)])
+    .map((character) => character.id === 'default-companion' && character.name === '默认小伙伴'
+      ? { ...character, name: defaultCharacter.name }
+      : character)
   const activeCharacterId = characters.some((character) => character.id === companion?.activeCharacterId)
     ? companion!.activeCharacterId!
     : characters[0].id
@@ -127,7 +131,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     albums: music.albums,
     folders: snapshot.folders ?? [],
     notes: snapshot.notes ?? [],
-    goals: snapshot.goals ?? [],
+    goals: (snapshot.goals ?? []).map(normalizeGoal),
     todos: snapshot.todos ?? [],
     pomodoro: { ...defaults.pomodoro, ...snapshot.pomodoro },
     clipboardSnippets: (snapshot.clipboardSnippets ?? []).map((snippet) => ({ ...snippet, copyCount: snippet.copyCount ?? 0 })),

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "better-sqlite3": "latest",
+    "canvas-confetti": "^1.9.4",
     "music-metadata": "latest",
     "taglib-wasm": "^1.5.3",
     "youtube-dl-exec": "^3.1.15"
@@ -34,6 +35,7 @@
     "@tiptap/react": "latest",
     "@tiptap/starter-kit": "latest",
     "@types/better-sqlite3": "latest",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
@@ -78,7 +80,10 @@
       "!node_modules/better-sqlite3/prebuilds/{darwin-*,linux-*,linuxmusl-*,win32-arm64.node}",
       "!node_modules/node-addon-api/**/*"
     ],
-    "electronLanguages": ["zh-CN", "en-US"],
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "compression": "maximum",
     "asarUnpack": [
       "node_modules/better-sqlite3/prebuilds/win32-x64.node"
