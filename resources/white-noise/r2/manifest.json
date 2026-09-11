@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "white-noise",
+  "license": "mixed",
+  "generatedAt": "2026-09-11",
+  "items": [
+    { "id": "window-rain", "audio": "audio/window-rain.opus", "alternateAudio": "audio/window-rain.mp3", "cover": "covers/window-rain.webp", "duration": 600.056583, "size": 6456086, "sha256": "3196a75b2e9168ff8eb5a06272e29c83df72960d7fbd414f49c71f8be05b5048", "alternateSize": 13403675, "alternateSha256": "bf14ffafb5342dd41c089839034d722519c6166f38de19b43deafd3c4068c5ec", "creator": "用户提供", "source": "local:0911.FLAC", "license": "project-local" },
+    { "id": "misty-forest", "audio": "audio/misty-forest.opus", "cover": "covers/misty-forest.webp", "duration": 600.006, "size": 6357051, "sha256": "970972d7363904ba0a4f1d41e3e63ff5f4d7ba7d33c46514454be03608748651", "creator": "BurghRecords", "source": "https://freesound.org/people/BurghRecords/sounds/463903" },
+    { "id": "midnight-ocean", "audio": "audio/midnight-ocean.opus", "cover": "covers/midnight-ocean.webp", "duration": 600.006, "size": 6007972, "sha256": "1fb57a573bb3cf165eb1ea8e0e647c0d4d4da6f35615de47d8c01f42e221bd06", "creator": "chris_dagorne", "source": "https://freesound.org/people/chris_dagorne/sounds/426075" },
+    { "id": "warm-fireplace", "audio": "audio/warm-fireplace.opus", "cover": "covers/warm-fireplace.webp", "duration": 600.006, "size": 6025666, "sha256": "a5e72d09554abf14d44ff78d02ac6d6d6e035e6ca52fe133415a3b773c43bbf6", "creator": "visionear", "source": "https://freesound.org/people/visionear/sounds/501417" },
+    { "id": "morning-cafe", "audio": "audio/morning-cafe.opus", "cover": "covers/morning-cafe.webp", "duration": 600.006, "size": 4925279, "sha256": "13d7a5ff15a4bb95880bb389ecde1ba028320ae9ab6193a283e8f0ea6a9169dc", "creator": "waweee", "source": "https://freesound.org/people/waweee/sounds/370973" },
+    { "id": "night-train", "audio": "audio/night-train.opus", "cover": "covers/night-train.webp", "duration": 600.006, "size": 6917836, "sha256": "8efa6e58bd30dceee1280146f10e43350722d2948ba08ca61312b9a55447cb7e", "creator": "Syphon64", "source": "https://freesound.org/people/Syphon64/sounds/135209" },
+    { "id": "mountain-wind", "audio": "audio/mountain-wind.opus", "cover": "covers/mountain-wind.webp", "duration": 600.006, "size": 5273064, "sha256": "7a4d3cff08a95ff4a89a95d3bedac9e03ee50458ecf84364e93de3078daade3b", "creator": "bitlab_coop", "source": "https://freesound.org/people/bitlab_coop/sounds/486891" },
+    { "id": "quiet-night", "audio": "audio/quiet-night.opus", "cover": "covers/quiet-night.webp", "duration": 600.006, "size": 7722089, "sha256": "f2e5b86ec325443bc1ec08d9f4bc0b668139e1c2fe7c70bc648ad0542cbdc84b", "creator": "felix.blume", "source": "https://freesound.org/people/felix.blume/sounds/328293" },
+    { "id": "forest-stream", "audio": "audio/forest-stream.opus", "cover": "covers/forest-stream.webp", "duration": 600.006, "size": 6352792, "sha256": "300d4439a5227ca6b76b65d088d79009d87fcfd1cba9c9f6b9b06821d8e8962b", "creator": "jackthemurray", "source": "https://freesound.org/people/jackthemurray/sounds/433589" },
+    { "id": "distant-thunder", "audio": "audio/distant-thunder.opus", "cover": "covers/distant-thunder.webp", "duration": 600.006, "size": 7016071, "sha256": "b7087d77f4678732c405e7f9b9121bcce27cf148061da76b78210ea18d08bf0f", "creator": "sagetyrtle", "source": "https://freesound.org/people/sagetyrtle/sounds/107518" }
+  ]
+}
