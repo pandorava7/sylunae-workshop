@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, ImageScanProgress, MediaToolsProgress, MusicImportProgress, ResourceDownloadProgress, SylunaeAPI } from '../../src/shared/types'
+import type { AppSnapshot, AppSnapshotPatch, ImageScanProgress, MediaToolsProgress, MusicImportProgress, ResourceDownloadProgress, SylunaeAPI } from '../../src/shared/types'
 
 const api: SylunaeAPI = {
   platform: 'electron',
   storage: {
     load: () => ipcRenderer.invoke('storage:load'),
-    save: (snapshot: AppSnapshot) => ipcRenderer.invoke('storage:save', snapshot),
+    save: (patch: AppSnapshotPatch) => ipcRenderer.invoke('storage:save', patch),
     replace: (snapshot: AppSnapshot) => ipcRenderer.invoke('storage:replace', snapshot),
   },
   music: {

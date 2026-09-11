@@ -6,6 +6,8 @@ import { createDefaultSnapshot } from '../../src/shared/defaults'
 import type { AppSnapshot } from '../../src/shared/types'
 import { normalizeThemePalettes } from '../../src/shared/theme'
 import { normalizeImageLibrary } from '../../src/images/library'
+import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot } from '../../src/data/snapshotSections'
+import type { AppSnapshotPatch } from '../../src/shared/types'
 
 let database: Database.Database | null = null
 
@@ -40,50 +42,94 @@ function getDatabase(): Database.Database {
       payload TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS app_state_sections (
+      section TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `)
   const meta = database.prepare('SELECT version FROM schema_meta LIMIT 1').get() as { version: number } | undefined
   if (!meta) database.prepare('INSERT INTO schema_meta(version) VALUES (?)').run(1)
+  migrateSectionStorage(database)
   return database
+}
+
+function migrateSectionStorage(db: Database.Database): void {
+  const existing = db.prepare('SELECT COUNT(*) AS count FROM app_state_sections').get() as { count: number }
+  if (existing.count > 0) return
+
+  const legacy = db.prepare('SELECT payload FROM app_state WHERE id = 1').get() as { payload: string } | undefined
+  let snapshot: AppSnapshot
+  try { snapshot = normalizeSnapshot(legacy ? JSON.parse(legacy.payload) as Partial<AppSnapshot> : {}) }
+  catch { snapshot = createDefaultSnapshot() }
+
+  const insert = db.prepare('INSERT INTO app_state_sections(section, payload, updated_at) VALUES (?, ?, ?)')
+  const migrate = db.transaction(() => {
+    const now = new Date().toISOString()
+    for (const { key, value } of splitSnapshot(snapshot)) insert.run(key, JSON.stringify(value), now)
+    db.prepare('DELETE FROM app_state').run()
+    db.prepare('UPDATE schema_meta SET version = 2').run()
+  })
+  migrate()
+}
+
+function normalizeSnapshot(parsed: Partial<AppSnapshot>): AppSnapshot {
+  const defaults = createDefaultSnapshot()
+  const legacyTool = parsed.settings?.lastTool as string | undefined
+  const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
+  const lastTool = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
+  return {
+    ...defaults,
+    ...parsed,
+    settings: { ...defaults.settings, ...parsed.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) },
+    todos: parsed.todos ?? [],
+    pomodoro: { ...defaults.pomodoro, ...parsed.pomodoro },
+    clipboardSnippets: parsed.clipboardSnippets ?? [],
+    launcherLinks: parsed.launcherLinks ?? [],
+    imageLibrary: normalizeImageLibrary(parsed.imageLibrary),
+  }
 }
 
 export function loadSnapshot(): AppSnapshot {
   const db = getDatabase()
-  const row = db.prepare('SELECT payload FROM app_state WHERE id = 1').get() as { payload: string } | undefined
-  if (!row) {
-    const initial = createDefaultSnapshot()
-    saveSnapshot(initial)
-    return initial
-  }
   try {
-    const parsed = JSON.parse(row.payload) as AppSnapshot
-    const defaults = createDefaultSnapshot()
-    const legacyTool = parsed.settings?.lastTool as string | undefined
-    const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
-    const lastTool = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
-    return {
-      ...defaults,
-      ...parsed,
-      settings: { ...defaults.settings, ...parsed.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) },
-      todos: parsed.todos ?? [],
-      pomodoro: { ...defaults.pomodoro, ...parsed.pomodoro },
-      clipboardSnippets: parsed.clipboardSnippets ?? [],
-      launcherLinks: parsed.launcherLinks ?? [],
-      imageLibrary: normalizeImageLibrary(parsed.imageLibrary),
-    }
+    const rows = db.prepare('SELECT section AS key, payload FROM app_state_sections').all() as Array<{ key: string; payload: string }>
+    const parsed = joinSnapshotSections(rows.flatMap((row) => {
+      try { return [{ key: row.key, value: JSON.parse(row.payload) }] }
+      catch { return [] }
+    }))
+    return normalizeSnapshot(parsed)
   } catch {
     const fallback = createDefaultSnapshot()
-    saveSnapshot(fallback)
+    replaceSnapshot(fallback)
     return fallback
   }
 }
 
-export function saveSnapshot(snapshot: AppSnapshot): void {
-  getDatabase()
-    .prepare(`
-      INSERT INTO app_state(id, payload, updated_at) VALUES (1, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
-    `)
-    .run(JSON.stringify(snapshot), new Date().toISOString())
+export function saveSnapshotPatch(patch: AppSnapshotPatch): void {
+  const entries = snapshotPatchEntries(patch)
+  if (entries.length === 0) return
+  const db = getDatabase()
+  const upsert = db.prepare(`
+    INSERT INTO app_state_sections(section, payload, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(section) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at
+  `)
+  const save = db.transaction(() => {
+    const now = new Date().toISOString()
+    for (const { key, value } of entries) upsert.run(key, JSON.stringify(value), now)
+  })
+  save()
+}
+
+export function replaceSnapshot(snapshot: AppSnapshot): void {
+  const db = getDatabase()
+  const insert = db.prepare('INSERT INTO app_state_sections(section, payload, updated_at) VALUES (?, ?, ?)')
+  const replace = db.transaction(() => {
+    db.prepare('DELETE FROM app_state_sections').run()
+    const now = new Date().toISOString()
+    for (const { key, value } of splitSnapshot(snapshot)) insert.run(key, JSON.stringify(value), now)
+  })
+  replace()
 }
 
 export function closeDatabase(): void {

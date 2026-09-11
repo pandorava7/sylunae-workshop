@@ -8,10 +8,10 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { create as createYoutubeDl } from 'youtube-dl-exec'
-import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
+import { closeDatabase, loadSnapshot, replaceSnapshot, saveSnapshotPatch } from './database'
 import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
 import { downloadResource, getResourceAudioPath, importWhiteNoise, listResources, removeResource } from './resourceManager'
-import type { AppSnapshot, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
+import type { AppSnapshot, AppSnapshotPatch, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
 const AUDIO_MIME_TYPES: Record<string, string> = {
@@ -710,8 +710,8 @@ function createWindow(): void {
 
 function registerIpc(): void {
   ipcMain.handle('storage:load', () => loadSnapshot())
-  ipcMain.handle('storage:save', (_event, snapshot: AppSnapshot) => saveSnapshot(snapshot))
-  ipcMain.handle('storage:replace', (_event, snapshot: AppSnapshot) => saveSnapshot(snapshot))
+  ipcMain.handle('storage:save', (_event, patch: AppSnapshotPatch) => saveSnapshotPatch(patch))
+  ipcMain.handle('storage:replace', (_event, snapshot: AppSnapshot) => replaceSnapshot(snapshot))
 
   ipcMain.handle('music:pick', async () => {
     const result = await dialog.showOpenDialog({

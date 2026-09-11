@@ -457,6 +457,9 @@ export interface AppSnapshot {
   launcherLinks: LauncherLink[]
 }
 
+/** Top-level persistence unit. Updates must contain only the domains that changed. */
+export type AppSnapshotPatch = { [Key in keyof AppSnapshot]?: AppSnapshot[Key] }
+
 export interface BackupSummary {
   notes: number
   goals: number
@@ -486,7 +489,7 @@ export interface SylunaeAPI {
   platform: 'electron'
   storage: {
     load: () => Promise<AppSnapshot>
-    save: (snapshot: AppSnapshot) => Promise<void>
+    save: (patch: AppSnapshotPatch) => Promise<void>
     replace: (snapshot: AppSnapshot) => Promise<void>
   }
   music: {

@@ -40,7 +40,9 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
   const [nowPlayingAmbient, setNowPlayingAmbient] = useState<ResourceItem | null>(null)
   const [pageScrolled, setPageScrolled] = useState(false)
-  const [activeTool, setActiveTool] = usePersistentState<ToolId>('navigation.activeTool', 'home')
+  // Always begin a new app session on the home page. Page-specific view choices
+  // below remain persisted so users do not lose their preferred subviews.
+  const [activeTool, setActiveTool] = useState<ToolId>('home')
   const [musicSection, setMusicSection] = usePersistentState<'library' | 'white-noise'>('navigation.musicSection', 'library')
   const [taskView, setTaskView] = usePersistentState<'goals' | 'todos' | 'pomodoro' | 'countdown'>('navigation.tasksView', 'goals')
   const [collectionView, setCollectionView] = usePersistentState<'bangumi' | 'images' | 'rss'>('navigation.collectionView', 'bangumi')
@@ -73,11 +75,6 @@ export default function App() {
     setSettingsOpen(true)
     update((state) => ({ ...state, settings: { ...state.settings, lastTool: 'home', updatedAt: new Date().toISOString() } }))
   }, [snapshot?.settings.lastTool, update])
-
-  useEffect(() => {
-    if (!snapshot || window.localStorage.getItem('navigation.activeTool')) return
-    setActiveTool(snapshot.settings.lastTool === 'settings' ? 'home' : snapshot.settings.lastTool)
-  }, [snapshot, setActiveTool])
 
   useEffect(() => {
     if (activeTool === 'music') setMusicMounted(true)

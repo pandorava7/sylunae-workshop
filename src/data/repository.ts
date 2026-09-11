@@ -1,34 +1,29 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { createDefaultSnapshot } from '../shared/defaults'
-import type { AppSnapshot, DeskCompanionCharacter, DeskCompanionSettings, HomeQuickActionId } from '../shared/types'
+import type { AppSnapshot, AppSnapshotPatch, DeskCompanionCharacter, DeskCompanionSettings, HomeQuickActionId } from '../shared/types'
 import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
 import { normalizeImageLibrary } from '../images/library'
 import { normalizeGoal } from '../goals/tracking'
+import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot, type SnapshotSectionKey } from './snapshotSections'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
 interface BangumiCoverRow { url: string; blob: Blob; cachedAt: string }
+interface SectionRow { key: SnapshotSectionKey; value: unknown }
 
 class SylunaeDatabase extends Dexie {
   state!: EntityTable<StateRow, 'id'>
   bangumiCovers!: EntityTable<BangumiCoverRow, 'url'>
+  sections!: EntityTable<SectionRow, 'key'>
   constructor() {
     super('siyue-workshop')
     this.version(1).stores({ state: 'id' })
     this.version(2).stores({ state: 'id', bangumiCovers: 'url, cachedAt' })
-  }
-}
-
-class LegacySiyueDatabase extends Dexie {
-  state!: EntityTable<StateRow, 'id'>
-  constructor() {
-    super('siyue-workshop')
-    this.version(1).stores({ state: 'id' })
+    this.version(3).stores({ state: 'id', bangumiCovers: 'url, cachedAt', sections: 'key' })
   }
 }
 
 const db = new SylunaeDatabase()
-const legacyDb = new LegacySiyueDatabase()
 
 function normalizeBundledCompanionAsset(source: string): string {
   return source.startsWith('/resources/fun/desk-companion/') ? source.slice(1) : source
@@ -61,21 +56,14 @@ function normalizeCompanionCharacter(value: Partial<DeskCompanionCharacter>, fal
   }
 }
 
-let browserMigration: Promise<void> | null = null
-
-async function migrateLegacyBrowserDatabase(): Promise<void> {
-  if (await Dexie.exists('siyue-workshop') === false) return
-
-  const currentRows = await db.state.toArray()
-  if (currentRows.length > 0) return
-
-  const legacyRows = await legacyDb.state.toArray()
-  if (legacyRows.length > 0) await db.state.bulkPut(legacyRows)
-}
-
-function ensureBrowserMigration(): Promise<void> {
-  browserMigration ??= migrateLegacyBrowserDatabase()
-  return browserMigration
+async function ensureSectionStorage(): Promise<void> {
+  if (await db.sections.count() > 0) return
+  const legacy = await db.state.get(1)
+  const snapshot = normalize(legacy?.snapshot)
+  await db.transaction('rw', db.sections, db.state, async () => {
+    await db.sections.bulkPut(splitSnapshot(snapshot))
+    await db.state.clear()
+  })
 }
 
 function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
@@ -145,25 +133,27 @@ export const repository = {
   isDesktop: Boolean(window.sylunae),
   async load(): Promise<AppSnapshot> {
     if (window.sylunae) return normalize(await window.sylunae.storage.load())
-    await ensureBrowserMigration()
-    const row = await db.state.get(1)
-    const snapshot = normalize(row?.snapshot)
-    if (!row) await db.state.put({ id: 1, snapshot })
-    return snapshot
+    await ensureSectionStorage()
+    return normalize(joinSnapshotSections(await db.sections.toArray()))
   },
-  async save(snapshot: AppSnapshot): Promise<void> {
-    if (window.sylunae) await window.sylunae.storage.save(snapshot)
+  async save(patch: AppSnapshotPatch): Promise<void> {
+    const entries = snapshotPatchEntries(patch)
+    if (entries.length === 0) return
+    if (window.sylunae) await window.sylunae.storage.save(patch)
     else {
-      await ensureBrowserMigration()
-      await db.state.put({ id: 1, snapshot })
+      await ensureSectionStorage()
+      await db.sections.bulkPut(entries)
     }
   },
   async replace(snapshot: AppSnapshot): Promise<void> {
     const safe = normalize(snapshot)
     if (window.sylunae) await window.sylunae.storage.replace(safe)
     else {
-      await ensureBrowserMigration()
-      await db.state.put({ id: 1, snapshot: safe })
+      await ensureSectionStorage()
+      await db.transaction('rw', db.sections, async () => {
+        await db.sections.clear()
+        await db.sections.bulkPut(splitSnapshot(safe))
+      })
     }
   },
 }

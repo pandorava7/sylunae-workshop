@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { repository } from '../data/repository'
-import type { AppSnapshot } from '../shared/types'
+import { changedSnapshotSections, snapshotPatchEntries } from '../data/snapshotSections'
+import type { AppSnapshot, AppSnapshotPatch } from '../shared/types'
 
 interface AppStoreValue {
   snapshot: AppSnapshot | null
@@ -21,6 +22,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
   const latest = useRef<AppSnapshot | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingPatch = useRef<AppSnapshotPatch>({})
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
+  const queuedSaveId = useRef(0)
 
   useEffect(() => {
     repository.load()
@@ -29,12 +33,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  const persist = useCallback(async (value: AppSnapshot) => {
+  const persist = useCallback((patch: AppSnapshotPatch): Promise<void> => {
+    if (snapshotPatchEntries(patch).length === 0) return saveQueue.current
+    const saveId = ++queuedSaveId.current
     setSaving(true)
-    try { await repository.save(value); setError('') }
-    catch { setError('保存失败，请稍后重试') }
-    finally { setSaving(false) }
+    const operation = saveQueue.current.then(() => repository.save(patch))
+    saveQueue.current = operation.catch(() => undefined)
+    void operation
+      .then(() => setError(''))
+      .catch(() => setError('保存失败，请稍后重试'))
+      .finally(() => {
+        if (saveId === queuedSaveId.current && snapshotPatchEntries(pendingPatch.current).length === 0) setSaving(false)
+      })
+    return operation
   }, [])
+
+  const drainPending = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    const patch = pendingPatch.current
+    pendingPatch.current = {}
+    return persist(patch)
+  }, [persist])
 
   const update = useCallback((recipe: (current: AppSnapshot) => AppSnapshot) => {
     setSnapshot((current) => {
@@ -42,25 +61,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const next = recipe(current)
       if (next === current) return current
       latest.current = next
+      Object.assign(pendingPatch.current, changedSnapshotSections(current, next))
       if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => { void persist(next) }, 350)
+      timer.current = setTimeout(() => { void drainPending() }, 350)
       return next
     })
-  }, [persist])
+  }, [drainPending])
 
   const flush = useCallback(async () => {
-    if (timer.current) clearTimeout(timer.current)
-    if (latest.current) await persist(latest.current)
-  }, [persist])
+    await drainPending()
+    await saveQueue.current
+  }, [drainPending])
 
   const replace = useCallback(async (value: AppSnapshot) => {
-    if (timer.current) clearTimeout(timer.current)
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    pendingPatch.current = {}
+    await saveQueue.current
     await repository.replace(value)
     latest.current = value
     setSnapshot(value)
   }, [])
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+    if (snapshotPatchEntries(pendingPatch.current).length > 0) void repository.save(pendingPatch.current)
+  }, [])
 
   const value = useMemo(() => ({ snapshot, loading, saving, error, update, replace, flush }), [snapshot, loading, saving, error, update, replace, flush])
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>

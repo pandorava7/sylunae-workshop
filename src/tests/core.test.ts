@@ -4,6 +4,7 @@ import { backupSummary, createBackup, parseBackup } from '../data/backup'
 import { fetchBangumiCollection } from '../data/bangumi'
 import { goalProgress, isOverdue } from '../utils'
 import { accessibleForeground, getThemeContrastIssues, normalizeThemePalettes, parseThemePalettes, serializeThemePalettes } from '../shared/theme'
+import { changedSnapshotSections, joinSnapshotSections, snapshotPatchEntries, splitSnapshot } from '../data/snapshotSections'
 
 describe('goal progress', () => {
   it('calculates milestone completion and completed override', () => {
@@ -28,6 +29,23 @@ describe('backup format', () => {
 
   it('rejects unrelated json', () => {
     expect(() => parseBackup('{"hello":"world"}')).toThrow()
+  })
+})
+
+describe('snapshot section persistence', () => {
+  it('persists only top-level domains whose references changed', () => {
+    const current = createDefaultSnapshot()
+    const next = { ...current, notes: [{
+      id: 'note-1', title: 'Draft', content: { type: 'doc' }, folderId: null, tags: [], pinned: false,
+      deletedAt: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    }] }
+
+    expect(snapshotPatchEntries(changedSnapshotSections(current, next))).toEqual([{ key: 'notes', value: next.notes }])
+  })
+
+  it('reassembles every persisted domain into the original snapshot', () => {
+    const snapshot = createDefaultSnapshot()
+    expect(joinSnapshotSections(splitSnapshot(snapshot))).toEqual(snapshot)
   })
 })
 

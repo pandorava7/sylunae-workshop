@@ -110,7 +110,40 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
   const [promptKind, setPromptKind] = useState<'link' | 'image-link' | null>(null)
   const [imageSourceOpen, setImageSourceOpen] = useState(false)
   const [captionPosition, setCaptionPosition] = useState<number | null>(null)
+  const [titleDraft, setTitleDraft] = useState(note.title)
   const imageInput = useRef<HTMLInputElement>(null)
+  const saveRef = useRef(onSave)
+  const contentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingContent = useRef<Note['content'] | null>(null)
+  const pendingTitle = useRef<string | null>(null)
+  saveRef.current = onSave
+
+  const commitContent = () => {
+    if (contentTimer.current) { clearTimeout(contentTimer.current); contentTimer.current = null }
+    if (pendingContent.current === null) return
+    const content = pendingContent.current
+    pendingContent.current = null
+    saveRef.current({ content })
+  }
+  const scheduleContent = (content: Note['content']) => {
+    pendingContent.current = content
+    if (contentTimer.current) clearTimeout(contentTimer.current)
+    contentTimer.current = setTimeout(commitContent, 500)
+  }
+  const commitTitle = () => {
+    if (titleTimer.current) { clearTimeout(titleTimer.current); titleTimer.current = null }
+    if (pendingTitle.current === null) return
+    const title = pendingTitle.current
+    pendingTitle.current = null
+    saveRef.current({ title })
+  }
+  const scheduleTitle = (title: string) => {
+    setTitleDraft(title)
+    pendingTitle.current = title
+    if (titleTimer.current) clearTimeout(titleTimer.current)
+    titleTimer.current = setTimeout(commitTitle, 500)
+  }
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), Markdown, MarkdownPaste],
     content: note.content,
@@ -144,7 +177,8 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
         return true
       },
     },
-    onUpdate: ({ editor: instance }) => onSave({ content: instance.getJSON() }),
+    onUpdate: ({ editor: instance }) => scheduleContent(instance.getJSON()),
+    onBlur: commitContent,
   })
 
   useEffect(() => {
@@ -152,6 +186,15 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     editor.setEditable(!inTrash)
     editor.commands.setContent(note.content, { emitUpdate: false })
   }, [note.id, inTrash])
+
+  useEffect(() => setTitleDraft(note.title), [note.title])
+
+  useEffect(() => () => {
+    if (contentTimer.current) clearTimeout(contentTimer.current)
+    if (titleTimer.current) clearTimeout(titleTimer.current)
+    if (pendingContent.current !== null) saveRef.current({ content: pendingContent.current })
+    if (pendingTitle.current !== null) saveRef.current({ title: pendingTitle.current })
+  }, [])
 
   if (!editor) return null
   const setLink = (url: string) => {
@@ -186,7 +229,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       {!inTrash && <button className="icon-button" onClick={() => onSave({ pinned: !note.pinned })} title={note.pinned ? '取消置顶' : '置顶'}>{note.pinned ? <PinOff size={17} /> : <Pin size={17} />}</button>}
       {inTrash ? <><button className="icon-button" onClick={onRestore} title="恢复"><ArchiveRestore size={17} /></button><button className="icon-button danger" onClick={onDestroy} title="永久删除"><Trash2 size={17} /></button></> : <button className="icon-button" onClick={onTrash} title="移至回收站"><Trash2 size={17} /></button>}
     </div></div>
-    <Input className="note-title-input" value={note.title} disabled={inTrash} onChange={(event) => onSave({ title: event.target.value })} placeholder="无标题笔记" />
+    <Input className="note-title-input" value={titleDraft} disabled={inTrash} onChange={(event) => scheduleTitle(event.target.value)} onBlur={commitTitle} placeholder="无标题笔记" />
     <NoteTagsInput tags={note.tags} disabled={inTrash} onChange={(tags) => onSave({ tags })} />
     {!inTrash && <div className="editor-toolbar">
       {action(editor.isActive('bold'), '粗体', <Bold size={16} />, () => { editor.chain().focus().toggleBold().run() })}
