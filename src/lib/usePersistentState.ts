@@ -1,10 +1,9 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
 
-/** Keeps navigational UI choices when the renderer is reloaded. */
-export function usePersistentState<T>(key: string, initialValue: T): [T, Dispatch<SetStateAction<T>>] {
+function useStorageState<T>(storage: Storage, key: string, initialValue: T): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
     try {
-      const saved = window.localStorage.getItem(key)
+      const saved = storage.getItem(key)
       return saved === null ? initialValue : JSON.parse(saved) as T
     } catch {
       return initialValue
@@ -17,13 +16,23 @@ export function usePersistentState<T>(key: string, initialValue: T): [T, Dispatc
         ? (nextValue as (value: T) => T)(currentValue)
         : nextValue
       try {
-        window.localStorage.setItem(key, JSON.stringify(next))
+        storage.setItem(key, JSON.stringify(next))
       } catch {
         // Navigation should remain usable when browser storage is unavailable.
       }
       return next
     })
-  }, [key])
+  }, [key, storage])
 
   return [value, setPersistentValue]
+}
+
+/** Keeps a preference across app launches. */
+export function usePersistentState<T>(key: string, initialValue: T): [T, Dispatch<SetStateAction<T>>] {
+  return useStorageState(window.localStorage, key, initialValue)
+}
+
+/** Keeps transient navigation through reloads, but resets when the window is closed. */
+export function useSessionState<T>(key: string, initialValue: T): [T, Dispatch<SetStateAction<T>>] {
+  return useStorageState(window.sessionStorage, key, initialValue)
 }

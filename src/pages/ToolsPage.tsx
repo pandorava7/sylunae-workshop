@@ -276,7 +276,7 @@ function ClipboardTool() {
             >
               <Clipboard size={19} />
               <span>
-                <strong>{category.label}</strong>
+                <strong className={category.value ? "private-category-name" : undefined}>{category.label}</strong>
                 <small>{category.count} 条内容</small>
               </span>
             </button>
@@ -327,7 +327,7 @@ function ClipboardTool() {
           >
             ← 全部分类
           </button>
-          <h2>{categoryLabel}</h2>
+          <h2 className={selectedCategory ? "user-content" : undefined}>{categoryLabel}</h2>
           <p>{visible.length} 条内容；在下方直接粘贴即可快速保存。</p>
         </div>
       </div>
@@ -395,9 +395,9 @@ function SnippetShortcutSection({
       <div className="snippet-shortcut-grid">
         {items.map((item) => (
           <article key={item.id} className="snippet-shortcut-card">
-            <span>{item.category.trim() || "未分类"}</span>
-            <strong>{item.title || "无标题内容"}</strong>
-            <p>{item.content}</p>
+            <span className={item.category.trim() ? "private-category-name" : undefined}>{item.category.trim() || "未分类"}</span>
+            <strong className={item.title ? "private-snippet-title" : undefined}>{item.title || "无标题内容"}</strong>
+            <p className="private-snippet-content">{item.content}</p>
             <div>
               <Button
                 variant="outline"
@@ -635,12 +635,12 @@ function LauncherTool() {
               <div className="launcher-open">
                 <SiteFavicon link={link} />
                 <div>
-                  <strong>{link.title}</strong>
-                  <small>{host}</small>
+                  <strong className="private-launcher-title">{link.title}</strong>
+                  <small className="private-launcher-host">{host}</small>
                 </div>
                 <ExternalLink size={16} />
               </div>
-              <p>{link.description || "未添加说明"}</p>
+              <p className={link.description ? "private-launcher-description" : undefined}>{link.description || "未添加说明"}</p>
               <div className="launcher-actions">
                 <div className="launcher-actions-primary">
                   <Button
@@ -878,7 +878,7 @@ function ImageTool() {
           {file ? (
             <>
               <ImageDown size={34} />
-              <strong>{file.name}</strong>
+              <strong className="user-content">{file.name}</strong>
               <span>
                 {(file.size / 1024 / 1024).toFixed(2)} MB · 点击更换图片
               </span>

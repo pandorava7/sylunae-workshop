@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, Check, CheckCircle2, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, PackageOpen, Palette, Play, RotateCcw, Settings, ShieldCheck, Sparkles, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { BellRing, Check, CheckCircle2, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, EyeOff, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, PackageOpen, Palette, Play, RotateCcw, Settings, ShieldCheck, Sparkles, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { applyPartialBackup, backupSummary, createBackup, createPartialBackup, parseBackup, parsePartialBackup, partialBackupSectionMeta, partialBackupSummary } from '../data/backup'
 import type { BackupEnvelope, PartialBackupEnvelope, PartialBackupSection, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
@@ -13,6 +13,7 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } fr
 import { Input } from './ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Textarea } from './ui/textarea'
+import { Switch } from './ui/switch'
 import { usePersistentState } from '../lib/usePersistentState'
 import type { MediaToolsStatus } from '../shared/types'
 import { MediaToolsDialog } from './MediaToolsDialog'
@@ -67,6 +68,7 @@ function SettingsPanel() {
 
   const currentSection = sections.find((section) => section.id === activeSection) || sections[0]
   const setTheme = (theme: ThemeMode) => update((state) => ({ ...state, settings: { ...state.settings, theme, updatedAt: nowIso() } }))
+  const setPrivateMode = (privateMode: boolean) => update((state) => ({ ...state, settings: { ...state.settings, privateMode, updatedAt: nowIso() } }))
   const setThemePalettes = (themePalettes: ThemePalettes) => update((state) => ({ ...state, settings: { ...state.settings, themePalettes, updatedAt: nowIso() } }))
   const setPomodoroAlarmPath = (pomodoroAlarmPath: string) => update((state) => ({ ...state, settings: { ...state.settings, pomodoroAlarmPath, updatedAt: nowIso() } }))
   const saveUsername = () => {
@@ -157,7 +159,7 @@ function SettingsPanel() {
       <header className="settings-content-header"><span className="eyebrow">SETTINGS</span><h2>{currentSection.label}</h2><p>{currentSection.description}</p></header>
       {message && <div className="notice success settings-notice"><Check size={16} /><span>{message}</span><button onClick={() => setMessage('')}>知道了</button></div>}
       <div className="settings-section-body">
-        {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} onThemeChange={setTheme} onPalettesChange={setThemePalettes} />}
+        {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} privateMode={snapshot.settings.privateMode} onThemeChange={setTheme} onPalettesChange={setThemePalettes} onPrivateModeChange={setPrivateMode} />}
         {activeSection === 'focus' && <FocusSettings alarmPath={snapshot.settings.pomodoroAlarmPath} onAlarmPathChange={setPomodoroAlarmPath} />}
         {activeSection === 'resources' && <ResourceSettings />}
         {activeSection === 'connections' && <ConnectionSettings username={username} onUsernameChange={setUsername} onSave={saveUsername} />}
@@ -171,7 +173,7 @@ function SettingsPanel() {
   </div>
 }
 
-function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }: { theme: ThemeMode; palettes: ThemePalettes; onThemeChange: (theme: ThemeMode) => void; onPalettesChange: (palettes: ThemePalettes) => void }) {
+function AppearanceSettings({ theme, palettes, privateMode, onThemeChange, onPalettesChange, onPrivateModeChange }: { theme: ThemeMode; palettes: ThemePalettes; privateMode: boolean; onThemeChange: (theme: ThemeMode) => void; onPalettesChange: (palettes: ThemePalettes) => void; onPrivateModeChange: (enabled: boolean) => void }) {
   const [editingMode, setEditingMode] = usePersistentState<keyof ThemePalettes>('navigation.themePaletteMode', theme === 'dark' ? 'dark' : 'light')
   const [cssCode, setCssCode] = useState(() => serializeThemePalettes(palettes))
   const [paletteMessage, setPaletteMessage] = useState('')
@@ -228,6 +230,14 @@ function AppearanceSettings({ theme, palettes, onThemeChange, onPalettesChange }
       <div className="theme-options"><ThemeOption value="system" active={theme === 'system'} icon={<Laptop />} title="跟随系统" onClick={onThemeChange} /><ThemeOption value="light" active={theme === 'light'} icon={<Sun />} title="浅色" onClick={onThemeChange} /><ThemeOption value="dark" active={theme === 'dark'} icon={<Moon />} title="深色" onClick={onThemeChange} /></div>
     </section>
 
+    <section className="settings-pane privacy-mode-pane">
+      <SettingHeading icon={<EyeOff />} title="私密模式" description="隐藏你在工坊中写下的内容，页面原有文案与操作界面保持清晰。" />
+      <label className="privacy-mode-control">
+        <span><strong>全局遮罩</strong><small>笔记、目标、待办及其他自行输入的文字都会被遮住；关闭后立即恢复显示。</small></span>
+        <Switch checked={privateMode} onCheckedChange={onPrivateModeChange} aria-label="切换私密模式" />
+      </label>
+    </section>
+
     <section className="settings-pane palette-pane">
       <SettingHeading icon={<Code2 />} title="全局配色" description="逐项调色，或让 AI 定制你的风格配色。" />
       <Tabs value={editingMode} onValueChange={(value) => setEditingMode(value as keyof ThemePalettes)}>
@@ -270,7 +280,7 @@ function FocusSettings({ alarmPath, onAlarmPathChange }: { alarmPath: string; on
     unlockPomodoroAlarm()
     playPomodoroAlarm(alarmPath)
   }
-  return <section className="settings-pane focus-settings"><SettingHeading icon={<BellRing />} title="番茄钟提示音" description="专注或休息结束时播放；未设置时使用默认的柔和钟铃。" /><div className="alarm-source"><div className="alarm-source-icon"><BellRing size={18} /></div><div><strong>{fileName || '默认钟铃'}</strong><small>{fileName ? '已选择自定义本地音频' : desktop ? '三声渐进的柔和提示音' : '自定义音频仅在桌面端可用'}</small></div></div><div className="alarm-actions"><Button variant="outline" className="button secondary" onClick={() => void chooseAlarm()} disabled={!desktop || choosing}><FolderOpen size={16} />{choosing ? '正在选择…' : '选择音频'}</Button><Button variant="outline" className="button secondary" onClick={previewAlarm} disabled={!desktop}><Play size={16} fill="currentColor" />试听</Button>{fileName && <Button variant="ghost" className="button alarm-reset" onClick={() => onAlarmPathChange('')}><RotateCcw size={16} />恢复默认</Button>}</div><small className="settings-note">支持 MP3、M4A、WAV、OGG、FLAC 等本地音频。若文件被移动或无法读取，将自动使用默认钟铃。</small></section>
+  return <section className="settings-pane focus-settings"><SettingHeading icon={<BellRing />} title="番茄钟提示音" description="专注或休息结束时播放；未设置时使用默认的柔和钟铃。" /><div className="alarm-source"><div className="alarm-source-icon"><BellRing size={18} /></div><div><strong className={fileName ? 'user-content' : undefined}>{fileName || '默认钟铃'}</strong><small>{fileName ? '已选择自定义本地音频' : desktop ? '三声渐进的柔和提示音' : '自定义音频仅在桌面端可用'}</small></div></div><div className="alarm-actions"><Button variant="outline" className="button secondary" onClick={() => void chooseAlarm()} disabled={!desktop || choosing}><FolderOpen size={16} />{choosing ? '正在选择…' : '选择音频'}</Button><Button variant="outline" className="button secondary" onClick={previewAlarm} disabled={!desktop}><Play size={16} fill="currentColor" />试听</Button>{fileName && <Button variant="ghost" className="button alarm-reset" onClick={() => onAlarmPathChange('')}><RotateCcw size={16} />恢复默认</Button>}</div><small className="settings-note">支持 MP3、M4A、WAV、OGG、FLAC 等本地音频。若文件被移动或无法读取，将自动使用默认钟铃。</small></section>
 }
 
 function DataSettings({ counts, onExport, onImport, inputRef, onFile, onExportPartial, onImportPartial, partialInputRef, onPartialFile }: { counts: { notes: number; goals: number; tracks: number }; onExport: () => void; onImport: () => void; inputRef: React.RefObject<HTMLInputElement | null>; onFile: (file: File) => void; onExportPartial: (section: PartialBackupSection) => void; onImportPartial: () => void; partialInputRef: React.RefObject<HTMLInputElement | null>; onPartialFile: (file: File) => void }) {

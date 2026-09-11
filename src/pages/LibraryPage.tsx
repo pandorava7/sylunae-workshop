@@ -159,8 +159,8 @@ export function LibraryPage({ embedded = false }: { embedded?: boolean }) {
         <SheetTitle asChild><h2>{selected.nameCn || selected.name}</h2></SheetTitle><SheetDescription asChild><div className="original-title">{selected.nameCn && selected.name !== selected.nameCn ? selected.name : '收藏条目详情'}</div></SheetDescription>
         <div className="stat-row"><div><span>站点评分</span><strong>{selected.score || '—'}</strong></div><div><span>我的评分</span><strong>{selected.rate || '—'}</strong></div><div><span>排名</span><strong>{selected.rank ? `#${selected.rank}` : '—'}</strong></div></div>
         {selected.summary && <p className="summary">{selected.summary}</p>}
-        {selected.comment && <blockquote>{selected.comment}</blockquote>}
-        {selected.tags.length > 0 && <div className="tag-row">{selected.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
+        {selected.comment && <blockquote className="private-personal-comment">{selected.comment}</blockquote>}
+        {selected.tags.length > 0 && <div className="tag-row">{selected.tags.map((tag) => <span className="private-personal-tag" key={tag}>#{tag}</span>)}</div>}
         <dl><dt>平台</dt><dd>{selected.platform || '—'}</dd><dt>首发日期</dt><dd>{selected.airDate || '—'}</dd><dt>收藏更新</dt><dd>{formatDate(selected.updatedAt, true)}</dd></dl>
         <Button className="button primary full" onClick={() => void openExternal(selected.url)}>在 Bangumi 中查看 <ExternalLink size={15} /></Button>
       </div>
@@ -179,10 +179,10 @@ function CollectionCard({ item, onClick }: { item: BangumiCollectionItem; onClic
       {item.cover ? <BangumiCover src={item.cover} alt="" loading="lazy" /> : <div className="cover-placeholder"><Sparkles /></div>}
       <span className={`collection-state state-${item.collectionType}`}>{COLLECTION_LABELS[item.collectionType]}</span>
       <span className={`collection-score${hasPersonalRating ? '' : ' website-score'}`}><Star size={13} fill="currentColor" />{formatScore(hasPersonalRating ? item.rate : item.score)}</span>
-      <div className="collection-title"><h3>{item.nameCn || item.name}</h3>{year && <span>{year}</span>}</div>
+      <div className="collection-title private-personal-tag"><h3>{item.nameCn || item.name}</h3>{year && <span>{year}</span>}</div>
     </div>
     <div className="collection-tags">
-      {shownTags.map((tag) => <span key={tag}>{tag}</span>)}
+      {shownTags.map((tag) => <span className="private-personal-tag" key={tag}>{tag}</span>)}
       {hiddenTagCount > 0 && <span>+{hiddenTagCount}</span>}
       {item.tags.length === 0 && item.platform && <span>{item.platform}</span>}
     </div>

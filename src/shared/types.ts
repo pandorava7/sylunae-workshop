@@ -58,6 +58,7 @@ export interface DeskCompanionSettings {
 export interface AppSettings {
   theme: ThemeMode
   themePalettes: ThemePalettes
+  privateMode: boolean
   lastTool: ToolId
   sidebarCollapsed: boolean
   sidebarWidth: number

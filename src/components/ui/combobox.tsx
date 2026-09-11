@@ -57,7 +57,7 @@ export function Combobox({
       <ChevronDown size={16} />
     </button>
     {open && <div id="category-combobox-options" role="listbox" className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10">
-      {matches.length ? matches.map((option) => <button key={option} type="button" role="option" aria-selected={value === option} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent" onMouseDown={(event) => event.preventDefault()} onClick={() => select(option)}><Check className={cn('size-4', value === option ? 'opacity-100' : 'opacity-0')} />{option}</button>) : <p className="px-2 py-1.5 text-sm text-muted-foreground">{emptyMessage}</p>}
+      {matches.length ? matches.map((option) => <button key={option} type="button" role="option" aria-selected={value === option} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent" onMouseDown={(event) => event.preventDefault()} onClick={() => select(option)}><Check className={cn('size-4', value === option ? 'opacity-100' : 'opacity-0')} /><span className="user-content">{option}</span></button>) : <p className="px-2 py-1.5 text-sm text-muted-foreground">{emptyMessage}</p>}
     </div>}
   </div>
 }

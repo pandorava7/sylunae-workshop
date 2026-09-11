@@ -9,6 +9,7 @@ export function createDefaultSnapshot(): AppSnapshot {
     settings: {
       theme: 'system',
       themePalettes: normalizeThemePalettes(),
+      privateMode: false,
       lastTool: 'home',
       sidebarCollapsed: false,
       sidebarWidth: 300,

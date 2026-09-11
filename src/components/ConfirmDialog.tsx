@@ -13,7 +13,7 @@ import {
 
 export function ConfirmDialog({ open, title, description, confirmLabel = '确认', destructive = false, icon, onConfirm, onOpenChange }: {
   open: boolean
-  title: string
+  title: ReactNode
   description: ReactNode
   confirmLabel?: string
   destructive?: boolean

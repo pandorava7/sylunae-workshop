@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import type { DeskCompanionSettings } from '../shared/types'
+import { DESK_COMPANION_PRESETS } from '../shared/deskCompanionPresets'
 
 const POSITION_KEY = 'fun.deskCompanion.position'
 const BUBBLE_DURATION = 5_000
@@ -256,6 +257,9 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
 
   const side = position.x + size / 2 < window.innerWidth / 2 ? 'left' : 'right'
   const line = transientLine ?? character.dialogues[lineIndex % Math.max(1, character.dialogues.length)]
+  const preset = DESK_COMPANION_PRESETS.find((item) => item.id === character.id)
+  const hasCustomDialogues = !preset || character.dialogues.length !== preset.dialogues.length || character.dialogues.some((item, index) => item !== preset.dialogues[index])
+  const hasCustomImage = !preset || character.image !== preset.image
 
   return <aside
     className="desk-companion"
@@ -284,7 +288,7 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
     >
-      <img src={character.image} alt="" draggable={false} />
+      <img className={hasCustomImage ? 'private-media' : undefined} src={character.image} alt="" draggable={false} />
     </button>
     {line && <button
       type="button"
@@ -300,7 +304,7 @@ export function DeskCompanion({ settings }: { settings: DeskCompanionSettings })
         <ellipse className="desk-companion-bubble-one" cx="352" cy="561" rx="37.5" ry="26" fill="#fff" stroke="#203170" strokeWidth="18" />
         <ellipse className="desk-companion-bubble-two" cx="442" cy="646" rx="24.5" ry="18" fill="#fff" stroke="#203170" strokeWidth="18" />
       </svg>
-      <span className="desk-companion-text">{line}</span>
+      <span className={`desk-companion-text ${!transientLine && hasCustomDialogues ? 'user-content' : ''}`}>{line}</span>
     </button>}
   </aside>
 }

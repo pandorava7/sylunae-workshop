@@ -15,6 +15,7 @@ const settingsSchema = z.object({
     light: z.record(z.string(), z.string()),
     dark: z.record(z.string(), z.string()),
   }).optional(),
+  privateMode: z.boolean().optional().default(false),
   lastTool: z.enum(['library', 'goals', 'home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings']),
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number().min(220).default(300),

@@ -32,6 +32,9 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
   const { snapshot, update } = useAppStore()
   const companion = snapshot?.settings.deskCompanion
   const activeCharacter = companion?.characters.find((item) => item.id === companion.activeCharacterId) ?? companion?.characters[0]
+  const activePreset = activeCharacter && DESK_COMPANION_PRESETS.find((item) => item.id === activeCharacter.id)
+  const customCharacterName = Boolean(activeCharacter && (!activePreset || activeCharacter.name !== activePreset.name))
+  const customCharacterImage = Boolean(activeCharacter && (!activePreset || activeCharacter.image !== activePreset.image))
   const [nameDraft, setNameDraft] = useState('')
   const [dialogueDraft, setDialogueDraft] = useState('')
   const [assetError, setAssetError] = useState('')
@@ -156,10 +159,10 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
 
         <section className="fun-feature-card">
           <div className="fun-feature-hero">
-            <span className="fun-feature-preview"><img src={activeCharacter.image} alt={`${activeCharacter.name}预览`} /></span>
+            <span className="fun-feature-preview"><img className={customCharacterImage ? 'private-media' : undefined} src={activeCharacter.image} alt={`${activeCharacter.name}预览`} /></span>
             <div>
               <span className="fun-feature-kicker"><Sparkles size={13} /> 桌面小伙伴</span>
-              <h3>{activeCharacter.name}</h3>
+              <h3 className={customCharacterName ? 'user-content' : undefined}>{activeCharacter.name}</h3>
               <p>拖动贴边，点击后会弹出这个角色的专属台词。</p>
             </div>
             <Button variant={companion.enabled ? 'secondary' : 'default'} onClick={() => patchCompanion({ enabled: !companion.enabled })}>
@@ -170,8 +173,8 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
           <div className="fun-feature-settings">
             <div className="fun-character-toolbar">
               <Select value={activeCharacter.id} onValueChange={selectCharacter}>
-                <SelectTrigger aria-label="选择小伙伴"><SelectValue /></SelectTrigger>
-                <SelectContent>{availableCharacters.map((item) => <SelectItem key={item.id} value={item.id} disabled={companion.characters.length >= 12 && !companion.characters.some((character) => character.id === item.id)}>{item.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label="选择小伙伴"><SelectValue className={customCharacterName ? 'user-content' : undefined} /></SelectTrigger>
+                <SelectContent>{availableCharacters.map((item) => <SelectItem key={item.id} value={item.id} disabled={companion.characters.length >= 12 && !companion.characters.some((character) => character.id === item.id)}><span className={DESK_COMPANION_PRESETS.some((preset) => preset.id === item.id && preset.name === item.name) ? undefined : 'user-content'}>{item.name}</span></SelectItem>)}</SelectContent>
               </Select>
               <Button type="button" variant="outline" onClick={addCharacter}><Plus />新增角色</Button>
               <Button type="button" variant="destructive" size="icon" disabled={companion.characters.length <= 1} aria-label="删除当前角色" onClick={() => setDeleteOpen(true)}><Trash2 /></Button>
@@ -232,14 +235,14 @@ export function FunFeaturesDialog({ open, onOpenChange }: { open: boolean; onOpe
         </section>
       </DialogContent>
     </Dialog>
-    <ConfirmDialog open={deleteOpen} title={`删除“${activeCharacter.name}”？`} description="该角色的图片、音效和对话将一起删除。" confirmLabel="删除角色" destructive icon={<Trash2 size={20} />} onConfirm={deleteCharacter} onOpenChange={setDeleteOpen} />
+    <ConfirmDialog open={deleteOpen} title={<><span>删除“</span><span className={customCharacterName ? 'user-content' : undefined}>{activeCharacter.name}</span><span>”？</span></>} description="该角色的图片、音效和对话将一起删除。" confirmLabel="删除角色" destructive icon={<Trash2 size={20} />} onConfirm={deleteCharacter} onOpenChange={setDeleteOpen} />
   </>
 }
 
 function SoundAssetRow({ label, name, source, inputRef, onUpload, onClear, onRestore }: { label: string; name: string; source: string; inputRef: RefObject<HTMLInputElement | null>; onUpload: (file?: File) => void | Promise<void>; onClear: () => void; onRestore: () => void }) {
   return <div className="fun-feature-asset-row">
     <span className="fun-feature-asset-icon"><Play size={15} /></span>
-    <div><strong>{label}</strong><small>{name || '未设置（保持静音）'}</small></div>
+    <div><strong>{label}</strong><small className={source.startsWith('data:') || source.startsWith('blob:') ? 'user-content' : undefined}>{name || '未设置（保持静音）'}</small></div>
     <input ref={inputRef} type="file" accept="audio/*" hidden onChange={(event) => { void onUpload(event.target.files?.[0]); event.currentTarget.value = '' }} />
     <Button type="button" variant="ghost" size="icon-sm" disabled={!source} aria-label={`试听${label}`} title="试听" onClick={() => previewSound(source)}><Play /></Button>
     <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}><Upload />上传</Button>

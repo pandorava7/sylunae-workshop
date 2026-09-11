@@ -62,6 +62,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const primaryNowPlaying = nowPlaying ?? nowPlayingAmbient
   const playingMusic = Boolean(nowPlaying)
+  const privateAmbient = nowPlayingAmbient?.origin === 'custom'
   const ambientCover = nowPlayingAmbient?.coverPath ? `/${nowPlayingAmbient.coverPath}` : ''
 
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
@@ -93,7 +94,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
       </button>
       <div className={`now-playing-slot ${primaryNowPlaying ? 'visible' : ''}`} aria-hidden={!primaryNowPlaying}>
         <button
-          className="sidebar-now-playing"
+          className={`sidebar-now-playing ${playingMusic || privateAmbient ? 'private-media-background' : ''}`}
           onClick={() => {
             if (playingMusic) select('music')
             else { onSelectMusicSection('white-noise'); onClose() }
@@ -103,8 +104,8 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
           style={{ '--now-playing-cover': nowPlaying?.cover ? `url(${nowPlaying.cover})` : ambientCover ? `url(${ambientCover})` : 'none' } as CSSProperties}
         >
           {playingMusic ? <span className="music-wave" aria-hidden><i /><i /><i /><i /></span> : <CloudRain className="ambient-now-playing-icon" size={22} strokeWidth={1.65} aria-hidden />}
-          <span className="now-playing-copy"><strong>{primaryNowPlaying?.title || '正在播放'}</strong><small>{playingMusic ? nowPlaying?.artist || '未知艺术家' : '环境白噪音'}</small></span>
-          {playingMusic && nowPlayingAmbient && <span className="ambient-now-playing-cover" title={`同时播放：${nowPlayingAmbient.title}`} aria-label={`同时播放：${nowPlayingAmbient.title}`}>{ambientCover ? <img src={ambientCover} alt="" /> : <CloudRain size={16} strokeWidth={1.65} />}</span>}
+          <span className="now-playing-copy"><strong className={playingMusic ? 'private-music-title' : privateAmbient ? 'user-content' : undefined}>{primaryNowPlaying?.title || '正在播放'}</strong><small className={playingMusic && nowPlaying?.artist ? 'private-music-artist' : undefined}>{playingMusic ? nowPlaying?.artist || '未知艺术家' : '环境白噪音'}</small></span>
+          {playingMusic && nowPlayingAmbient && <span className="ambient-now-playing-cover" title={`同时播放：${nowPlayingAmbient.title}`} aria-label={`同时播放：${nowPlayingAmbient.title}`}>{ambientCover ? <img className={privateAmbient ? 'private-media' : undefined} src={ambientCover} alt="" /> : <CloudRain size={16} strokeWidth={1.65} />}</span>}
         </button>
       </div>
       <nav>

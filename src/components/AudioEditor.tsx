@@ -341,7 +341,7 @@ export function AudioEditor() {
             <div className="audio-editor-filebar">
               <span className="audio-editor-file-icon"><AudioLines size={19} /></span>
               <div>
-                <strong>{file?.name}</strong>
+                <strong className="user-content">{file?.name}</strong>
                 <span>{file ? formatBytes(file.size) : ""} · {buffer.sampleRate / 1000} kHz · {buffer.numberOfChannels === 1 ? "单声道" : `${buffer.numberOfChannels} 声道`}</span>
               </div>
               <Button variant="outline" className="button secondary" onClick={() => inputRef.current?.click()}>

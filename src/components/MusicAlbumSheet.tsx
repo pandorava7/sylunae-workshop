@@ -33,8 +33,8 @@ export function MusicAlbumSheet({ album, tracks, onClose, onSave, onPlay }: {
   return <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
     <SheetContent className="detail-drawer music-album-drawer" showCloseButton>
       <SheetHeader className="metadata-sheet-header">
-        <SheetTitle>{album.title}</SheetTitle>
-        <SheetDescription>{album.artist} · {tracks.length} 首歌曲 · {formatDuration(totalDuration)}</SheetDescription>
+        <SheetTitle><span className="private-music-title">{album.title}</span></SheetTitle>
+        <SheetDescription><span className="private-music-artist">{album.artist}</span> · {tracks.length} 首歌曲 · {formatDuration(totalDuration)}</SheetDescription>
       </SheetHeader>
       <div className="album-sheet-body">
         <div className="album-cover-editor">
@@ -43,7 +43,7 @@ export function MusicAlbumSheet({ album, tracks, onClose, onSave, onPlay }: {
           <input ref={input} hidden type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; if (file) selectCover(file); event.currentTarget.value = '' }} />
         </div>
         {error && <div className="notice error">{error}</div>}
-        <div className="album-track-list"><h3>收录歌曲</h3>{tracks.map((track, index) => <button type="button" className="album-track-item" key={track.id} disabled={track.missing} onClick={() => onPlay(track)} aria-label={track.missing ? `${track.title}，文件已移动或删除` : `从 ${track.title} 开始播放专辑`}><span className="album-track-number"><span>{index + 1}</span><Play size={13} fill="currentColor" /></span><div>{track.cover ? <img src={track.cover} alt="" /> : displayCover ? <img src={displayCover} alt="" /> : <Music2 size={15} />}</div><strong>{track.title}</strong><small>{track.missing ? '缺失' : formatDuration(track.duration)}</small></button>)}</div>
+        <div className="album-track-list"><h3>收录歌曲</h3>{tracks.map((track, index) => <button type="button" className="album-track-item" key={track.id} disabled={track.missing} onClick={() => onPlay(track)} aria-label={track.missing ? `${track.title}，文件已移动或删除` : `从 ${track.title} 开始播放专辑`}><span className="album-track-number"><span>{index + 1}</span><Play size={13} fill="currentColor" /></span><div>{track.cover ? <img src={track.cover} alt="" /> : displayCover ? <img src={displayCover} alt="" /> : <Music2 size={15} />}</div><strong className="private-music-title">{track.title}</strong><small>{track.missing ? '缺失' : formatDuration(track.duration)}</small></button>)}</div>
       </div>
       <SheetFooter className="metadata-sheet-footer"><Button variant="outline" className="button secondary" onClick={onClose}>取消</Button><Button className="button primary" onClick={() => { onSave(cover); onClose() }}>保存专辑封面</Button></SheetFooter>
     </SheetContent>

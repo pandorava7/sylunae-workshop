@@ -9,7 +9,7 @@ import type { MusicTrack, PomodoroMode, ResourceItem, ToolId, WorkspaceToolId } 
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 import { playPomodoroAlarm, unlockPomodoroAlarm } from './utils/pomodoroAlarm'
-import { usePersistentState } from './lib/usePersistentState'
+import { usePersistentState, useSessionState } from './lib/usePersistentState'
 
 const MusicPage = lazy(() => import('./pages/MusicPage').then((module) => ({ default: module.MusicPage })))
 const WhiteNoisePage = lazy(() => import('./pages/WhiteNoisePage').then((module) => ({ default: module.WhiteNoisePage })))
@@ -40,9 +40,9 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
   const [nowPlayingAmbient, setNowPlayingAmbient] = useState<ResourceItem | null>(null)
   const [pageScrolled, setPageScrolled] = useState(false)
-  // Always begin a new app session on the home page. Page-specific view choices
-  // below remain persisted so users do not lose their preferred subviews.
-  const [activeTool, setActiveTool] = useState<ToolId>('home')
+  // Reloads stay on the current page, while closing the desktop window clears
+  // sessionStorage so the next app launch begins on the home page.
+  const [activeTool, setActiveTool] = useSessionState<ToolId>('navigation.activeTool', 'home')
   const [musicSection, setMusicSection] = usePersistentState<'library' | 'white-noise'>('navigation.musicSection', 'library')
   const [taskView, setTaskView] = usePersistentState<'goals' | 'todos' | 'pomodoro' | 'countdown'>('navigation.tasksView', 'goals')
   const [collectionView, setCollectionView] = usePersistentState<'bangumi' | 'images' | 'rss'>('navigation.collectionView', 'bangumi')
@@ -68,6 +68,12 @@ export default function App() {
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
   }, [snapshot?.settings.theme, snapshot?.settings.themePalettes])
+
+  useEffect(() => {
+    if (!snapshot) return
+    document.documentElement.dataset.privateMode = snapshot.settings.privateMode ? 'on' : 'off'
+    return () => { delete document.documentElement.dataset.privateMode }
+  }, [snapshot?.settings.privateMode])
 
   useEffect(() => {
     if (snapshot?.settings.lastTool !== 'settings') return
