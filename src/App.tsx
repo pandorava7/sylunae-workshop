@@ -3,13 +3,14 @@ import { Clock3 } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { Spinner } from './components/Icons'
 import { useAppStore } from './app/AppStore'
-import type { MusicTrack, PomodoroMode, ToolId, WorkspaceToolId } from './shared/types'
+import type { MusicTrack, PomodoroMode, ResourceItem, ToolId, WorkspaceToolId } from './shared/types'
 import { accessibleForeground, themeColorFields, themeCssVariables, themeDerivedCssVariables } from './shared/theme'
 import { TooltipProvider } from './components/ui/tooltip'
 import { playPomodoroAlarm, unlockPomodoroAlarm } from './utils/pomodoroAlarm'
 import { usePersistentState } from './lib/usePersistentState'
 
 const MusicPage = lazy(() => import('./pages/MusicPage').then((module) => ({ default: module.MusicPage })))
+const WhiteNoisePage = lazy(() => import('./pages/WhiteNoisePage').then((module) => ({ default: module.WhiteNoisePage })))
 const NotesPage = lazy(() => import('./pages/NotesPage').then((module) => ({ default: module.NotesPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })))
 const CollectionPage = lazy(() => import('./pages/CollectionPage').then((module) => ({ default: module.CollectionPage })))
@@ -33,8 +34,13 @@ export default function App() {
   const [settingsMounted, setSettingsMounted] = useState(false)
   const [musicMounted, setMusicMounted] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<MusicTrack | null>(null)
+  const [nowPlayingAmbient, setNowPlayingAmbient] = useState<ResourceItem | null>(null)
   const [pageScrolled, setPageScrolled] = useState(false)
   const [activeTool, setActiveTool] = usePersistentState<ToolId>('navigation.activeTool', 'home')
+  const [musicSection, setMusicSection] = usePersistentState<'library' | 'white-noise'>('navigation.musicSection', 'library')
+  const [taskView, setTaskView] = usePersistentState<'goals' | 'todos' | 'pomodoro' | 'countdown'>('navigation.tasksView', 'goals')
+  const [collectionView, setCollectionView] = usePersistentState<'bangumi' | 'images' | 'rss'>('navigation.collectionView', 'bangumi')
+  const [musicView, setMusicView] = usePersistentState<'tracks' | 'albums'>('navigation.musicView', 'tracks')
   const [homeIntent, setHomeIntent] = useState<'new-note' | 'todos' | 'pomodoro' | 'clipboard' | null>(null)
 
   useEffect(() => {
@@ -73,7 +79,7 @@ export default function App() {
     if (activeTool === 'music') setMusicMounted(true)
   }, [activeTool])
 
-  useEffect(() => setPageScrolled(false), [activeTool])
+  useEffect(() => setPageScrolled(false), [activeTool, musicSection])
 
   useEffect(() => {
     if (!snapshot?.pomodoro.running || !snapshot.pomodoro.endsAt) return
@@ -104,6 +110,7 @@ export default function App() {
 
   const selectTool = (tool: ToolId) => {
     setHomeIntent(null)
+    if (tool === 'music') setMusicSection('library')
     setActiveTool(tool)
     update((state) => {
       const recentTools = tool !== 'home' && tool !== 'settings' ? [tool as WorkspaceToolId, ...state.settings.recentTools.filter((item) => item !== tool)].slice(0, 5) : state.settings.recentTools
@@ -122,6 +129,23 @@ export default function App() {
     })
   }
   const openPomodoro = () => openFromHome('tasks', 'pomodoro')
+  const selectMusicSection = (section: 'library' | 'white-noise') => {
+    selectTool('music')
+    setMusicSection(section)
+  }
+  const selectTaskView = (view: 'goals' | 'todos' | 'pomodoro' | 'countdown') => {
+    setHomeIntent(null)
+    setTaskView(view)
+    selectTool('tasks')
+  }
+  const selectCollectionView = (view: 'bangumi' | 'images' | 'rss') => {
+    setCollectionView(view)
+    selectTool('collection')
+  }
+  const selectMusicView = (view: 'tracks' | 'albums') => {
+    setMusicView(view)
+    selectMusicSection('library')
+  }
   const setSidebarCollapsed = (collapsed: boolean) => update((state) => {
     if (state.settings.sidebarCollapsed === collapsed) return state
     return { ...state, settings: { ...state.settings, sidebarCollapsed: collapsed, updatedAt: new Date().toISOString() } }
@@ -145,8 +169,8 @@ export default function App() {
   const openSettings = () => { setSettingsMounted(true); setSettingsOpen(true) }
   const page = {
     home: <HomePage onOpenTool={openFromHome} />,
-    tasks: <TasksPage initialView={homeIntent === 'todos' ? 'todos' : homeIntent === 'pomodoro' ? 'pomodoro' : 'goals'} startPomodoro={homeIntent === 'pomodoro'} />,
-    collection: <CollectionPage />,
+    tasks: <TasksPage view={taskView} onViewChange={setTaskView} initialView={homeIntent === 'todos' ? 'todos' : homeIntent === 'pomodoro' ? 'pomodoro' : 'goals'} startPomodoro={homeIntent === 'pomodoro'} />,
+    collection: <CollectionPage view={collectionView} onViewChange={setCollectionView} />,
     tools: <ToolsPage initialView={homeIntent === 'clipboard' ? 'clipboard' : 'home'} />,
     music: null,
     notes: <NotesPage createOnOpen={homeIntent === 'new-note'} />,
@@ -158,7 +182,7 @@ export default function App() {
   const pomodoroTime = `${String(Math.floor(snapshot.pomodoro.secondsRemaining / 60)).padStart(2, '0')}:${String(snapshot.pomodoro.secondsRemaining % 60).padStart(2, '0')}`
 
   return <TooltipProvider><div className="app-shell" style={{ '--sidebar-width': `${renderedSidebarWidth}px` } as CSSProperties}>
-    <Sidebar active={activeTool} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} onSelect={selectTool} onOpenSettings={openSettings} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
+    <Sidebar active={activeTool} taskView={taskView} collectionView={collectionView} musicSection={musicSection} musicView={musicView} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} nowPlaying={nowPlaying} nowPlayingAmbient={nowPlayingAmbient} onSelect={selectTool} onSelectTaskView={selectTaskView} onSelectCollectionView={selectCollectionView} onSelectMusicSection={selectMusicSection} onSelectMusicView={selectMusicView} onOpenSettings={openSettings} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
     {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''} ${snapshot.pomodoro.running ? 'pomodoro-running' : ''}`}>
       <div className="app-titlebar-drag" />
       {snapshot.pomodoro.running && <button type="button" className="pomodoro-titlebar" onClick={openPomodoro} aria-label={`打开番茄钟：${pomodoroModeLabels[snapshot.pomodoro.mode]}中，剩余 ${pomodoroTime}`}>
@@ -175,7 +199,10 @@ export default function App() {
     }}>
       <Suspense fallback={<div className="app-loading"><Spinner /></div>}>
         {page}
-        {(musicMounted || activeTool === 'music') && <div className="persistent-page" hidden={activeTool !== 'music'}><MusicPage onNowPlayingChange={setNowPlaying} /></div>}
+        {(musicMounted || activeTool === 'music') && <div className="persistent-page" hidden={activeTool !== 'music'}>
+          <div className="persistent-page" hidden={musicSection !== 'library'}><MusicPage view={musicView} onViewChange={setMusicView} onNowPlayingChange={setNowPlaying} onOpenWhiteNoise={() => setMusicSection('white-noise')} /></div>
+          <div className="persistent-page" hidden={musicSection !== 'white-noise'}><WhiteNoisePage onNowPlayingChange={setNowPlayingAmbient} /></div>
+        </div>}
       </Suspense>
       <div className={`save-indicator ${error ? 'error' : ''}`}>{error || (saving ? '正在保存…' : '')}</div>
     </main>

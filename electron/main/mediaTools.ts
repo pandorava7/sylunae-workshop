@@ -40,7 +40,7 @@ const MEDIA_TOOLS: MediaToolDefinition[] = [
   },
 ]
 
-let installation: Promise<MediaToolsStatus> | null = null
+let installation: Promise<void> | null = null
 
 function toolsDirectory(): string {
   return join(app.getPath('userData'), 'media-tools')
@@ -130,15 +130,21 @@ async function downloadTool(tool: MediaToolDefinition, report: (progress: MediaT
   }
 }
 
-export function installMediaTools(report: (progress: MediaToolsProgress) => void): Promise<MediaToolsStatus> {
-  if (installation) return installation
+export async function installMediaTools(report: (progress: MediaToolsProgress) => void): Promise<MediaToolsStatus> {
   if (process.platform !== 'win32' || process.arch !== 'x64') return Promise.reject(new Error('媒体工具目前仅支持 Windows x64'))
-  installation = (async () => {
-    for (const tool of MEDIA_TOOLS) await downloadTool(tool, report)
-    report({ stage: 'complete', tool: null, message: '媒体工具已准备完成', receivedBytes: 0, totalBytes: null, percent: 100 })
-    return getMediaToolsStatus()
-  })().finally(() => { installation = null })
-  return installation
+  if (!installation) {
+    installation = (async () => {
+      for (const tool of MEDIA_TOOLS) await downloadTool(tool, report)
+      report({ stage: 'complete', tool: null, message: '媒体工具已准备完成', receivedBytes: 0, totalBytes: null, percent: 100 })
+    })()
+  }
+  const activeInstallation = installation
+  try {
+    await activeInstallation
+  } finally {
+    if (installation === activeInstallation) installation = null
+  }
+  return getMediaToolsStatus()
 }
 
 export function getMediaToolPaths(): { ffmpeg: string; ytDlp: string } {

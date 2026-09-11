@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { create as createYoutubeDl } from 'youtube-dl-exec'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './database'
 import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
+import { downloadResource, getResourceAudioPath, importWhiteNoise, listResources, removeResource } from './resourceManager'
 import type { AppSnapshot, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
@@ -773,6 +774,18 @@ function registerIpc(): void {
   })
   ipcMain.handle('music:read-metadata', (_event, filePath: string) => readEditableMetadata(filePath))
   ipcMain.handle('music:update-metadata', (_event, update: MusicMetadataUpdate) => updateTrackMetadata(update))
+
+  ipcMain.handle('resources:list', () => listResources())
+  ipcMain.handle('resources:download', (event, id: string) => downloadResource(id, (progress) => {
+    if (!event.sender.isDestroyed()) event.sender.send('resources:download-progress', progress)
+  }))
+  ipcMain.handle('resources:remove', (_event, id: string) => removeResource(id))
+  ipcMain.handle('resources:import-white-noise', () => importWhiteNoise())
+  ipcMain.handle('resources:get-audio-url', async (_event, id: string) => {
+    const filePath = await getResourceAudioPath(id)
+    sessionMediaPaths.add(filePath)
+    return `sylunae-media://audio/${Buffer.from(filePath).toString('base64url')}`
+  })
 
   ipcMain.handle('images:pick', async () => {
     const result = await dialog.showOpenDialog({

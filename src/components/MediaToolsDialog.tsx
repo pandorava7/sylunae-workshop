@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Download, PackageOpen } from 'lucide-react'
 import type { MediaToolsProgress, MediaToolsStatus } from '../shared/types'
 import { Button } from './ui/button'
@@ -32,28 +32,56 @@ export function MediaToolsDialog({ open, onOpenChange, onReady }: {
   const [progress, setProgress] = useState<MediaToolsProgress | null>(null)
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState('')
+  const completed = useRef(false)
 
   useEffect(() => window.sylunae?.music.onMediaToolsProgress(setProgress), [])
   useEffect(() => {
     if (!open || !window.sylunae) return
+    completed.current = false
     setError('')
     setProgress(null)
     void window.sylunae.music.getMediaToolsStatus().then((next) => {
       setStatus(next)
       setInstalling(next.installing)
-      if (next.ready) { onOpenChange(false); onReady?.() }
+      if (next.ready && !completed.current) {
+        completed.current = true
+        setInstalling(false)
+        onOpenChange(false)
+        onReady?.()
+      }
     }).catch((reason) => setError(readableError(reason)))
   }, [open])
 
+  useEffect(() => {
+    if (!open || !installing || !window.sylunae) return
+    const checkCompletion = () => {
+      void window.sylunae!.music.getMediaToolsStatus().then((next) => {
+        setStatus(next)
+        if (!next.ready || completed.current) return
+        completed.current = true
+        setInstalling(false)
+        onOpenChange(false)
+        onReady?.()
+      }).catch(() => { /* The active installation call reports actionable errors. */ })
+    }
+    if (progress?.stage === 'complete') checkCompletion()
+    const timer = window.setInterval(checkCompletion, 1000)
+    return () => window.clearInterval(timer)
+  }, [open, installing, progress?.stage, onOpenChange, onReady])
+
   const install = async () => {
     if (!window.sylunae) return
+    completed.current = false
     setInstalling(true)
     setError('')
     try {
       const next = await window.sylunae.music.installMediaTools()
       setStatus(next)
-      onOpenChange(false)
-      onReady?.()
+      if (next.ready && !completed.current) {
+        completed.current = true
+        onOpenChange(false)
+        onReady?.()
+      }
     } catch (reason) {
       setError(readableError(reason))
     } finally {

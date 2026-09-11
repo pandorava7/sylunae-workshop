@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, Check, CheckCircle2, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, PackageOpen, Palette, Play, RotateCcw, Settings, ShieldCheck, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { BellRing, Check, CheckCircle2, ClipboardPaste, Code2, Copy, Database, Download, ExternalLink, FileWarning, FolderOpen, Globe2, HardDrive, Info, Laptop, Link2, Moon, PackageOpen, Palette, Play, RotateCcw, Settings, ShieldCheck, Sparkles, Sun, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { applyPartialBackup, backupSummary, createBackup, createPartialBackup, parseBackup, parsePartialBackup, partialBackupSectionMeta, partialBackupSummary } from '../data/backup'
 import type { BackupEnvelope, PartialBackupEnvelope, PartialBackupSection, ThemeMode, ThemePalette, ThemePalettes } from '../shared/types'
@@ -16,12 +16,14 @@ import { Textarea } from './ui/textarea'
 import { usePersistentState } from '../lib/usePersistentState'
 import type { MediaToolsStatus } from '../shared/types'
 import { MediaToolsDialog } from './MediaToolsDialog'
+import { ResourceSettings } from './ResourceSettings'
 
-type SettingsSection = 'appearance' | 'focus' | 'connections' | 'data' | 'about'
+type SettingsSection = 'appearance' | 'focus' | 'resources' | 'connections' | 'data' | 'about'
 
 const sections: Array<{ id: SettingsSection; label: string; description: string; icon: typeof Settings }> = [
   { id: 'appearance', label: '外观', description: '主题与显示', icon: Palette },
   { id: 'focus', label: '专注', description: '番茄钟与提醒', icon: BellRing },
+  { id: 'resources', label: '资源管理', description: '下载与本地内容', icon: Sparkles },
   { id: 'connections', label: '关联服务', description: 'Bangumi 收藏', icon: Link2 },
   { id: 'data', label: '数据与备份', description: '导入、导出', icon: Database },
   { id: 'about', label: '关于', description: '环境与版本', icon: Info },
@@ -157,6 +159,7 @@ function SettingsPanel() {
       <div className="settings-section-body">
         {activeSection === 'appearance' && <AppearanceSettings theme={snapshot.settings.theme} palettes={snapshot.settings.themePalettes} onThemeChange={setTheme} onPalettesChange={setThemePalettes} />}
         {activeSection === 'focus' && <FocusSettings alarmPath={snapshot.settings.pomodoroAlarmPath} onAlarmPathChange={setPomodoroAlarmPath} />}
+        {activeSection === 'resources' && <ResourceSettings />}
         {activeSection === 'connections' && <ConnectionSettings username={username} onUsernameChange={setUsername} onSave={saveUsername} />}
         {activeSection === 'data' && <DataSettings counts={{ notes: snapshot.notes.length, goals: snapshot.goals.length, tracks: snapshot.tracks.length }} onExport={() => void exportBackup()} onImport={() => void importBackup()} inputRef={importInput} onFile={(file) => void file.text().then(applyImport)} onExportPartial={(section) => void exportPartialBackup(section)} onImportPartial={() => void importPartialBackup()} partialInputRef={partialImportInput} onPartialFile={(file) => void file.text().then(applyPartialImport)} />}
         {activeSection === 'about' && <AboutSettings />}

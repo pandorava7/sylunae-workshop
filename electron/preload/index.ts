@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSnapshot, ImageScanProgress, MediaToolsProgress, MusicImportProgress, SylunaeAPI } from '../../src/shared/types'
+import type { AppSnapshot, ImageScanProgress, MediaToolsProgress, MusicImportProgress, ResourceDownloadProgress, SylunaeAPI } from '../../src/shared/types'
 
 const api: SylunaeAPI = {
   platform: 'electron',
@@ -30,6 +30,18 @@ const api: SylunaeAPI = {
     getAudioUrl: (path) => ipcRenderer.invoke('music:get-url', path),
     readMetadata: (path) => ipcRenderer.invoke('music:read-metadata', path),
     updateMetadata: (update) => ipcRenderer.invoke('music:update-metadata', update),
+  },
+  resources: {
+    list: () => ipcRenderer.invoke('resources:list'),
+    download: (id) => ipcRenderer.invoke('resources:download', id),
+    remove: (id) => ipcRenderer.invoke('resources:remove', id),
+    importWhiteNoise: () => ipcRenderer.invoke('resources:import-white-noise'),
+    getAudioUrl: (id) => ipcRenderer.invoke('resources:get-audio-url', id),
+    onDownloadProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: ResourceDownloadProgress) => listener(progress)
+      ipcRenderer.on('resources:download-progress', handler)
+      return () => ipcRenderer.removeListener('resources:download-progress', handler)
+    },
   },
   images: {
     pick: () => ipcRenderer.invoke('images:pick'),

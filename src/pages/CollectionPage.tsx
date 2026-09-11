@@ -7,16 +7,18 @@ import { usePersistentState } from '../lib/usePersistentState'
 
 type CollectionView = 'bangumi' | 'images' | 'rss'
 
-export function CollectionPage() {
-  const [view, setView] = usePersistentState<CollectionView>('navigation.collectionView', 'bangumi')
+export function CollectionPage({ view, onViewChange }: { view?: CollectionView; onViewChange?: (view: CollectionView) => void }) {
+  const [storedView, setStoredView] = usePersistentState<CollectionView>('navigation.collectionView', 'bangumi')
+  const activeView = view ?? storedView
+  const setView = onViewChange ?? setStoredView
   const pageRef = useRef<HTMLElement>(null)
-  useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
+  useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [activeView])
   return <section ref={pageRef} className="page collection-hub-page">
     <header className="page-header"><div><span className="eyebrow">COLLECTION</span><h1>收藏馆</h1><p>收拢喜欢的作品、画面与持续关注的内容</p></div></header>
-    <Tabs value={view} onValueChange={(value) => setView(value as CollectionView)} className="workspace-tabs">
+    <Tabs value={activeView} onValueChange={(value) => setView(value as CollectionView)} className="workspace-tabs">
       <TabsList className="workspace-tab-list"><TabsTrigger value="bangumi"><BookOpen size={16} />Bangumi</TabsTrigger><TabsTrigger value="images"><Images size={16} />精选图片</TabsTrigger><TabsTrigger value="rss"><Rss size={16} />RSS 订阅<span className="soon-badge">即将推出</span></TabsTrigger></TabsList>
     </Tabs>
-    {view === 'bangumi' ? <LibraryPage embedded /> : view === 'images' ? <ImageGalleryPage /> : <CollectionPlaceholder />}
+    {activeView === 'bangumi' ? <LibraryPage embedded /> : activeView === 'images' ? <ImageGalleryPage /> : <CollectionPlaceholder />}
   </section>
 }
 

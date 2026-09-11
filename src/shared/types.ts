@@ -255,6 +255,57 @@ export interface MediaToolsProgress {
   percent: number | null
 }
 
+export type ResourceKind = 'white-noise'
+export type ResourceOrigin = 'builtin' | 'official' | 'custom'
+export type ResourceInstallState = 'builtin' | 'available' | 'downloading' | 'installed' | 'error'
+
+export interface ResourceAttribution {
+  creator: string
+  sourceTitle: string
+  sourceUrl: string
+  license: string
+  licenseUrl: string
+}
+
+export interface ResourceCatalogItem {
+  id: string
+  kind: ResourceKind
+  title: string
+  description: string
+  tags: string[]
+  coverPath: string
+  audioPath: string
+  duration: number
+  size: number
+  sha256: string
+  builtin: boolean
+  attribution: ResourceAttribution
+}
+
+export interface ResourceItem extends ResourceCatalogItem {
+  origin: ResourceOrigin
+  state: ResourceInstallState
+  installedSize: number
+  localPath?: string
+  createdAt?: string
+}
+
+export interface ResourceSummary {
+  items: ResourceItem[]
+  installedBytes: number
+  availableBytes: number
+  remoteConfigured: boolean
+}
+
+export interface ResourceDownloadProgress {
+  id: string
+  receivedBytes: number
+  totalBytes: number | null
+  percent: number | null
+  stage: 'downloading' | 'verifying' | 'complete' | 'error'
+  message: string
+}
+
 export interface NoteFolder {
   id: string
   name: string
@@ -406,6 +457,14 @@ export interface SylunaeAPI {
     getAudioUrl: (path: string) => Promise<string>
     readMetadata: (path: string) => Promise<MusicEditableMetadata>
     updateMetadata: (update: MusicMetadataUpdate) => Promise<MusicTrack>
+  }
+  resources: {
+    list: () => Promise<ResourceSummary>
+    download: (id: string) => Promise<ResourceItem>
+    remove: (id: string) => Promise<void>
+    importWhiteNoise: () => Promise<ResourceItem | null>
+    getAudioUrl: (id: string) => Promise<string>
+    onDownloadProgress: (listener: (progress: ResourceDownloadProgress) => void) => () => void
   }
   images: {
     pick: () => Promise<ImageAsset[]>

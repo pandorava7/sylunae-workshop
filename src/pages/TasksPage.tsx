@@ -20,20 +20,22 @@ const viewMeta: Record<TaskView, { label: string; icon: typeof Target }> = {
   countdown: { label: '倒数日', icon: CalendarClock },
 }
 
-export function TasksPage({ initialView = 'goals', startPomodoro = false }: { initialView?: TaskView; startPomodoro?: boolean }) {
-  const [view, setView] = usePersistentState<TaskView>('navigation.tasksView', initialView)
+export function TasksPage({ initialView = 'goals', startPomodoro = false, view, onViewChange }: { initialView?: TaskView; startPomodoro?: boolean; view?: TaskView; onViewChange?: (view: TaskView) => void }) {
+  const [storedView, setStoredView] = usePersistentState<TaskView>('navigation.tasksView', initialView)
+  const activeView = view ?? storedView
+  const setView = onViewChange ?? setStoredView
   const pageRef = useRef<HTMLElement>(null)
   useEffect(() => { if (initialView !== 'goals') setView(initialView) }, [initialView, setView])
-  useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [view])
+  useEffect(() => { pageRef.current?.scrollTo({ top: 0 }) }, [activeView])
   return <section ref={pageRef} className="page tasks-page">
     <header className="page-header"><div><span className="eyebrow">TASK SPACE</span><h1>任务箱</h1><p>让计划、专注与日常小事在同一个地方有序发生</p></div></header>
-    <Tabs value={view} onValueChange={(value) => setView(value as TaskView)} className="workspace-tabs">
+    <Tabs value={activeView} onValueChange={(value) => setView(value as TaskView)} className="workspace-tabs">
       <TabsList className="workspace-tab-list">{Object.entries(viewMeta).map(([id, item]) => { const Icon = item.icon; return <TabsTrigger key={id} value={id}><Icon size={16} />{item.label}{id === 'countdown' && <span className="soon-badge">即将推出</span>}</TabsTrigger> })}</TabsList>
     </Tabs>
-    {view === 'goals' && <GoalsPage embedded />}
-    {view === 'todos' && <TodoPanel />}
-    {view === 'pomodoro' && <PomodoroPanel autoStart={startPomodoro} />}
-    {view === 'countdown' && <CountdownPlaceholder />}
+    {activeView === 'goals' && <GoalsPage embedded />}
+    {activeView === 'todos' && <TodoPanel />}
+    {activeView === 'pomodoro' && <PomodoroPanel autoStart={startPomodoro} />}
+    {activeView === 'countdown' && <CountdownPlaceholder />}
   </section>
 }
 

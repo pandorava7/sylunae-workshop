@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Album, Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
+import { Album, ArrowRight, CloudRain, Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import type { MusicAlbum, MusicMetadataUpdate, MusicTrack } from '../shared/types'
 import { formatDuration } from '../utils'
@@ -19,17 +19,19 @@ import { usePersistentState } from '../lib/usePersistentState'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
-export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: MusicTrack | null) => void }) {
+export function MusicPage({ view: controlledView, onViewChange, onNowPlayingChange, onOpenWhiteNoise }: { view?: 'tracks' | 'albums'; onViewChange?: (view: 'tracks' | 'albums') => void; onNowPlayingChange: (track: MusicTrack | null) => void; onOpenWhiteNoise: () => void }) {
   const { snapshot, update } = useAppStore()
   const tracks = snapshot?.tracks || []
   const albums = snapshot?.albums || []
-  const [view, setView] = usePersistentState<'tracks' | 'albums'>('navigation.musicView', 'tracks')
+  const [storedView, setStoredView] = usePersistentState<'tracks' | 'albums'>('navigation.musicView', 'tracks')
+  const view = controlledView ?? storedView
+  const setView = onViewChange ?? setStoredView
   const [query, setQuery] = useState('')
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState(0.8)
+  const [volume, setVolume] = usePersistentState('music.volume', 0.8)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<RepeatMode>('off')
   const [queueAlbumId, setQueueAlbumId] = useState<string | null>(null)
@@ -163,10 +165,10 @@ export function MusicPage({ onNowPlayingChange }: { onNowPlayingChange: (track: 
     update((state) => ({ ...state, albums: state.albums.map((album) => album.id === albumId ? { ...album, cover, updatedAt: new Date().toISOString() } : album) }))
   }
 
-  if (!window.sylunae) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
+  if (!window.sylunae) return <section className="page"><header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>属于桌面端的安静播放器</p></div><Button className="button secondary" onClick={onOpenWhiteNoise}><CloudRain size={17} />白噪音<ArrowRight size={15} /></Button></header><EmptyState icon={<Music2 size={27} />} title="桌面版专属能力" description="浏览器无法长期、安全地保留本地音乐路径。安装并打开丝月工坊桌面版后，即可建立你的音乐资料库。" /></section>
 
   return <section className="page music-page">
-    <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={17} />添加音乐</Button></header>
+    <header className="page-header"><div><span className="eyebrow">MUSIC</span><h1>音乐</h1><p>{tracks.length ? `${tracks.length} 首本地音乐` : '让喜欢的声音留在手边'}</p></div><div className="music-header-actions"><Button className="button secondary" onClick={onOpenWhiteNoise}><CloudRain size={17} />白噪音<ArrowRight size={15} /></Button><Button className="button primary" onClick={() => setImportOpen(true)}><Plus size={17} />添加音乐</Button></div></header>
     <div
       className={`music-hero ${playing && currentCover ? 'is-playing' : ''}`}
       style={{ '--music-hero-cover': currentCover ? `url(${currentCover})` : 'none' } as CSSProperties}
