@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Activity, Archive, ArrowRight, BarChart3, CalendarDays, ChevronRight, Circle, CircleDot, Compass, GitBranch, HeartHandshake, Lightbulb, ListChecks, Pause, Play, Plus, RefreshCw, Search, Sparkles, Target, Trash2 } from 'lucide-react'
+import { Activity, Archive, ArrowRight, BarChart3, CalendarDays, ChevronRight, Circle, CircleDot, Compass, GitBranch, HeartHandshake, Lightbulb, ListChecks, Maximize2, Pause, Play, Plus, RefreshCw, Search, Sparkles, Target, Trash2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import type { Goal, GoalCheckIn, GoalProgressMode, GoalReviewCadence, GoalStatus, Milestone } from '../shared/types'
 import { formatDate, isOverdue, newId, nowIso } from '../utils'
@@ -17,6 +17,7 @@ import { Slider } from '../components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Textarea } from '../components/ui/textarea'
 import { usePersistentState } from '../lib/usePersistentState'
+import { GoalSpace } from '../components/GoalSpace'
 
 type GoalFilter = GoalStatus | 'all'
 type SortMode = 'attention' | 'due' | 'progress' | 'updated'
@@ -34,6 +35,7 @@ export function GoalsPage({ embedded = false }: { embedded?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creatingFor, setCreatingFor] = useState<string | null | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null)
+  const [spaceOpen, setSpaceOpen] = useState(false)
   const selected = goals.find((goal) => goal.id === selectedId) || null
   const active = goals.filter((goal) => goal.status === 'active')
   const needingAttention = active.filter((goal) => ['at-risk', 'off-track'].includes(goalHealth(goal, goals)))
@@ -80,7 +82,7 @@ export function GoalsPage({ embedded = false }: { embedded?: boolean }) {
   return <section className={`${embedded ? 'task-panel' : 'page'} goals-page goals-workspace`}>
     <div className={embedded ? 'panel-heading goals-heading' : 'page-header goals-heading'}>
       <div>{!embedded && <span className="eyebrow">GOAL SYSTEM</span>}<h2>{embedded ? '目标追踪' : '目标系统'}</h2><p>让方向、成果和今天要做的事始终连在一起</p></div>
-      <Button className="button primary" onClick={() => setCreatingFor(null)}><Plus size={17} />新建目标</Button>
+      <div className="goals-heading-actions"><Button variant="outline" className="button secondary" onClick={() => setSpaceOpen(true)}><Maximize2 size={16} />进入目标空间</Button><Button className="button primary" onClick={() => setCreatingFor(null)}><Plus size={17} />新建目标</Button></div>
     </div>
 
     {goals.length > 0 && <div className="goal-dashboard">
@@ -108,6 +110,7 @@ export function GoalsPage({ embedded = false }: { embedded?: boolean }) {
     {creatingFor !== undefined && <GoalForm goals={goals} initialParentId={creatingFor} onClose={() => setCreatingFor(undefined)} onSubmit={addGoal} />}
     {selected && <GoalDrawer goal={selected} goals={goals} onClose={() => setSelectedId(null)} onOpenGoal={setSelectedId} onAddSubgoal={() => setCreatingFor(selected.id)} onSave={(patch) => saveGoal(selected.id, patch)} onCreateTodo={(title) => createGoalTodo(selected.id, title)} onDelete={() => setDeleteTarget(selected)} />}
     <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }} title="永久删除目标？" description={deleteTarget ? <><span>“</span><span className="user-content">{deleteTarget.title}</span><span>”会被删除；它的子目标会保留并移到顶层。此操作无法撤销。</span></> : ''} confirmLabel="永久删除" destructive icon={<Trash2 />} onConfirm={() => { if (deleteTarget) removeGoal(deleteTarget); setDeleteTarget(null) }} />
+    {spaceOpen && <GoalSpace goals={goals} onClose={() => setSpaceOpen(false)} onOpenGoal={setSelectedId} />}
   </section>
 }
 

@@ -686,8 +686,8 @@ function createWindow(): void {
   const window = new BrowserWindow({
     width: 1380,
     height: 880,
-    minWidth: 900,
-    minHeight: 620,
+    minWidth: 360,
+    minHeight: 560,
     backgroundColor: '#ffffff',
     icon: app.isPackaged ? undefined : fileURLToPath(new URL('../../build/icon.png', import.meta.url)),
     titleBarStyle: 'hidden',
