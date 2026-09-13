@@ -45,6 +45,7 @@ const api: SylunaeAPI = {
   },
   images: {
     pick: () => ipcRenderer.invoke('images:pick'),
+    pickFile: () => ipcRenderer.invoke('images:pick-file'),
     pickRoot: (recursive) => ipcRenderer.invoke('images:pick-root', recursive),
     scan: (taskId, library, rootId) => ipcRenderer.invoke('images:scan', taskId, library, rootId),
     cancelScan: (taskId) => ipcRenderer.invoke('images:cancel-scan', taskId),
@@ -57,6 +58,7 @@ const api: SylunaeAPI = {
     relocateAsset: (assetId, library) => ipcRenderer.invoke('images:relocate-asset', assetId, library),
     checkPaths: (paths) => ipcRenderer.invoke('images:check-paths', paths),
     getUrls: (paths) => ipcRenderer.invoke('images:get-urls', paths),
+    getThumbnailUrls: (paths) => ipcRenderer.invoke('images:get-thumbnail-urls', paths),
   },
   backup: {
     exportFile: (contents, defaultName) => ipcRenderer.invoke('backup:export', contents, defaultName),

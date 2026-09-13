@@ -5,6 +5,8 @@ import { fetchBangumiCollection } from '../data/bangumi'
 import { goalProgress, isOverdue } from '../utils'
 import { accessibleForeground, getThemeContrastIssues, normalizeThemePalettes, parseThemePalettes, serializeThemePalettes } from '../shared/theme'
 import { changedSnapshotSections, joinSnapshotSections, snapshotPatchEntries, splitSnapshot } from '../data/snapshotSections'
+import { normalizeCountdowns } from '../countdowns/normalize'
+import type { CountdownEvent, ImageAsset } from '../shared/types'
 
 describe('goal progress', () => {
   it('calculates milestone completion and completed override', () => {
@@ -30,6 +32,27 @@ describe('backup format', () => {
   it('rejects unrelated json', () => {
     expect(() => parseBackup('{"hello":"world"}')).toThrow()
   })
+
+  it('migrates legacy countdown fields while importing a backup', () => {
+    const envelope = createBackup(createDefaultSnapshot()) as unknown as { snapshot: { countdowns: unknown[] } }
+    envelope.snapshot.countdowns = [{
+      id: 'legacy-countdown', title: '纪念日', targetDate: '2020-09-12', category: 'anniversary',
+      note: '', yearly: true, pinned: true, createdAt: '2020-09-12T00:00:00.000Z', updatedAt: '2020-09-12T00:00:00.000Z',
+    }]
+    const restored = parseBackup(JSON.stringify(envelope))
+    expect(restored.snapshot.countdowns[0]).toMatchObject({ repeat: 'yearly', targetTime: '09:00', precise: false, mode: 'auto', includeStartDay: false, accent: 'neutral', coverImagePath: '' })
+  })
+
+  it('migrates a legacy gallery cover reference to an independent local path', () => {
+    const event = {
+      id: 'countdown', title: '旅行', targetDate: '2026-10-01', category: 'travel', note: '', targetTime: '09:00', precise: false,
+      repeat: 'none', mode: 'auto', includeStartDay: false, accent: 'neutral', coverImageId: 'asset-1', pinned: false,
+      createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z',
+    } as unknown as CountdownEvent
+    const asset = { id: 'asset-1', path: 'C:\\Pictures\\trip.jpg' } as ImageAsset
+    expect(normalizeCountdowns([event], [asset])[0]).toMatchObject({ coverImagePath: 'C:\\Pictures\\trip.jpg' })
+    expect(normalizeCountdowns([event], [asset])[0]).not.toHaveProperty('coverImageId')
+  })
 })
 
 describe('snapshot section persistence', () => {
@@ -46,6 +69,18 @@ describe('snapshot section persistence', () => {
   it('reassembles every persisted domain into the original snapshot', () => {
     const snapshot = createDefaultSnapshot()
     expect(joinSnapshotSections(splitSnapshot(snapshot))).toEqual(snapshot)
+  })
+
+  it('persists a countdown edit without rewriting other domains', () => {
+    const current = createDefaultSnapshot()
+    const next = { ...current, countdowns: [{
+      id: 'countdown-1', title: '旅行', targetDate: '2026-10-01', category: 'travel' as const,
+      note: '', targetTime: '09:00', precise: false, repeat: 'none' as const, mode: 'auto' as const,
+      includeStartDay: false, accent: 'neutral' as const, coverImagePath: '', pinned: false,
+      createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z',
+    }] }
+
+    expect(snapshotPatchEntries(changedSnapshotSections(current, next))).toEqual([{ key: 'countdowns', value: next.countdowns }])
   })
 })
 

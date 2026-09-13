@@ -47,6 +47,8 @@ export function createDefaultSnapshot(): AppSnapshot {
     notes: [],
     goals: [],
     todos: [],
+    recurringTodos: [],
+    todoCompletionRecords: [],
     pomodoro: {
       mode: 'focus',
       focusMinutes: 25,
@@ -58,6 +60,7 @@ export function createDefaultSnapshot(): AppSnapshot {
       running: false,
       endsAt: null,
     },
+    countdowns: [],
     clipboardSnippets: [],
     launcherLinks: [],
   }

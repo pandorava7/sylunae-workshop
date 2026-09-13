@@ -5,6 +5,7 @@ import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
 import { normalizeImageLibrary } from '../images/library'
 import { normalizeGoal } from '../goals/tracking'
+import { normalizeCountdowns } from '../countdowns/normalize'
 import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot, type SnapshotSectionKey } from './snapshotSections'
 
 interface StateRow { id: number; snapshot: AppSnapshot }
@@ -68,6 +69,7 @@ async function ensureSectionStorage(): Promise<void> {
 
 function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
   const defaults = createDefaultSnapshot()
+  const imageLibrary = normalizeImageLibrary(snapshot?.imageLibrary)
   if (!snapshot) return defaults
   const music = reconcileMusicLibrary(snapshot.tracks ?? [], snapshot.albums ?? [])
   const legacyTool = snapshot.settings?.lastTool as string | undefined
@@ -121,10 +123,13 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     notes: snapshot.notes ?? [],
     goals: (snapshot.goals ?? []).map(normalizeGoal),
     todos: snapshot.todos ?? [],
+    recurringTodos: snapshot.recurringTodos ?? [],
+    todoCompletionRecords: snapshot.todoCompletionRecords ?? [],
     pomodoro: { ...defaults.pomodoro, ...snapshot.pomodoro },
+    countdowns: normalizeCountdowns(snapshot.countdowns ?? [], imageLibrary.assets),
     clipboardSnippets: (snapshot.clipboardSnippets ?? []).map((snippet) => ({ ...snippet, copyCount: snippet.copyCount ?? 0 })),
       launcherLinks: snapshot.launcherLinks ?? [],
-      imageLibrary: normalizeImageLibrary(snapshot.imageLibrary),
+      imageLibrary,
       bangumi: null,
   }
 }

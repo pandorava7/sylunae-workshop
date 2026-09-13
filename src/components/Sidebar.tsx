@@ -63,7 +63,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
   const primaryNowPlaying = nowPlaying ?? nowPlayingAmbient
   const playingMusic = Boolean(nowPlaying)
   const privateAmbient = nowPlayingAmbient?.origin === 'custom'
-  const ambientCover = nowPlayingAmbient?.coverPath ? `/${nowPlayingAmbient.coverPath}` : ''
+  const ambientCover = nowPlayingAmbient?.coverPath ?? ''
 
   const select = (tool: ToolId) => { onSelect(tool); onClose() }
   const openSettings = () => { onOpenSettings(); onClose() }

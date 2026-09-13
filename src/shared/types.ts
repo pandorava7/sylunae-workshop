@@ -421,6 +421,65 @@ export interface PomodoroState {
   endsAt: string | null
 }
 
+export interface LocalImageReference {
+  path: string
+  name: string
+}
+
+export type CountdownCategory = 'birthday' | 'anniversary' | 'travel' | 'event' | 'other'
+export type CountdownRepeat = 'none' | 'weekly' | 'monthly' | 'yearly'
+export type CountdownMode = 'auto' | 'countdown' | 'countup'
+export type CountdownAccent = 'neutral' | 'rose' | 'amber' | 'sage' | 'sky'
+
+export interface CountdownEvent {
+  id: string
+  title: string
+  targetDate: string
+  category: CountdownCategory
+  note: string
+  /** Legacy field retained while old snapshots are normalized. */
+  yearly?: boolean
+  targetTime: string
+  precise: boolean
+  repeat: CountdownRepeat
+  mode: CountdownMode
+  includeStartDay: boolean
+  accent: CountdownAccent
+  coverImagePath: string
+  /** Legacy field retained while old snapshots are normalized. */
+  coverImageId?: string
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type RecurringTodoFrequency = 'daily' | 'weekly' | 'monthly' | 'interval'
+
+export interface RecurringTodo {
+  id: string
+  title: string
+  priority: TodoPriority
+  frequency: RecurringTodoFrequency
+  /** Local calendar date (YYYY-MM-DD) from which this routine starts. */
+  startDate: string
+  /** 0–6 for Sunday–Saturday; used by weekly routines. */
+  weekdays?: number[]
+  /** 1–31; shorter months use their final calendar day. */
+  dayOfMonth?: number
+  /** Positive number of calendar days; used by interval routines. */
+  intervalDays?: number
+  paused: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TodoCompletionRecord {
+  id: string
+  recurringTodoId: string
+  occurrenceDate: string
+  completedAt: string
+}
+
 export interface ClipboardSnippet {
   id: string
   title: string
@@ -453,7 +512,10 @@ export interface AppSnapshot {
   notes: Note[]
   goals: Goal[]
   todos: QuickTodo[]
+  recurringTodos: RecurringTodo[]
+  todoCompletionRecords: TodoCompletionRecord[]
   pomodoro: PomodoroState
+  countdowns: CountdownEvent[]
   clipboardSnippets: ClipboardSnippet[]
   launcherLinks: LauncherLink[]
 }
@@ -518,6 +580,7 @@ export interface SylunaeAPI {
   }
   images: {
     pick: () => Promise<ImageAsset[]>
+    pickFile: () => Promise<LocalImageReference | null>
     pickRoot: (recursive: boolean) => Promise<ImageLibraryRoot | null>
     scan: (taskId: string, library: ImageLibraryState, rootId?: string) => Promise<ImageLibraryState>
     cancelScan: (taskId: string) => Promise<void>
@@ -526,6 +589,7 @@ export interface SylunaeAPI {
     relocateAsset: (assetId: string, library: ImageLibraryState) => Promise<ImageLibraryState | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getUrls: (paths: string[]) => Promise<Record<string, string>>
+    getThumbnailUrls: (paths: string[]) => Promise<Record<string, string>>
   }
   backup: {
     exportFile: (contents: string, defaultName?: string) => Promise<boolean>

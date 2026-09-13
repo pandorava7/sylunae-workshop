@@ -11,7 +11,10 @@ export const snapshotSectionKeys = [
   'notes',
   'goals',
   'todos',
+  'recurringTodos',
+  'todoCompletionRecords',
   'pomodoro',
+  'countdowns',
   'clipboardSnippets',
   'launcherLinks',
 ] as const satisfies readonly (keyof AppSnapshot)[]

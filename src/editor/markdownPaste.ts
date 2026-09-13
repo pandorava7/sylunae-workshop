@@ -8,7 +8,39 @@ export function looksLikeMarkdown(value: string) {
   return blockSyntax.test(value) || setextHeadingOrTable.test(value) || inlineSyntax.test(value)
 }
 
+function currentListItemType(editor: Editor) {
+  const { $from } = editor.state.selection
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const type = $from.node(depth).type.name
+    if (type === 'listItem' || type === 'taskItem') return type
+  }
+
+  return null
+}
+
+function handleListContinuationPaste(editor: Editor | null, event: ClipboardEvent) {
+  const text = event.clipboardData?.getData('text/plain')
+  if (!editor || !text || !text.includes('\n') || looksLikeMarkdown(text)) return false
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  if (lines.at(-1) === '') lines.pop()
+
+  const listItemType = currentListItemType(editor)
+  if (!listItemType || lines.length < 2) return false
+
+  event.preventDefault()
+  const chain = editor.chain().focus().insertContent(lines[0])
+  for (const line of lines.slice(1)) {
+    chain.splitListItem(listItemType).insertContent(line)
+  }
+
+  return chain.run()
+}
+
 export function handleMarkdownPaste(editor: Editor | null, event: ClipboardEvent) {
+  if (handleListContinuationPaste(editor, event)) return true
+
   const markdown = event.clipboardData?.getData('text/plain')
   if (!editor || !markdown || !looksLikeMarkdown(markdown)) return false
 

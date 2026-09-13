@@ -51,6 +51,8 @@ export function ImageGalleryPage() {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [urls, setUrls] = useState<Record<string, string>>({})
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({})
+  const [thumbnailFallbackPaths, setThumbnailFallbackPaths] = useState<Set<string>>(() => new Set())
   const [loadedPaths, setLoadedPaths] = useState<Set<string>>(() => new Set())
   const [failedPaths, setFailedPaths] = useState<Set<string>>(() => new Set())
   const [selected, setSelected] = useState<ImageAsset | null>(null)
@@ -70,7 +72,8 @@ export function ImageGalleryPage() {
   const [removeAsset, setRemoveAsset] = useState<ImageAsset | null>(null)
   const taskRef = useRef<string | null>(null)
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const urlRequestsRef = useRef<Set<string>>(new Set())
+  const thumbnailUrlRequestsRef = useRef<Set<string>>(new Set())
+  const fullUrlRequestsRef = useRef<Set<string>>(new Set())
   const mountedRef = useRef(true)
 
   const saveLibrary = (next: ImageLibraryState) => update((state) => ({ ...state, imageLibrary: next }))
@@ -167,20 +170,46 @@ export function ImageGalleryPage() {
 
   useEffect(() => {
     if (!window.sylunae) return
-    const paths = pagedVisible.filter((asset) => !asset.missing && !urls[asset.path] && !urlRequestsRef.current.has(asset.path)).map((asset) => asset.path)
+    const paths = pagedVisible.filter((asset) => !asset.missing && !thumbnailUrls[asset.path] && !thumbnailUrlRequestsRef.current.has(asset.path)).map((asset) => asset.path)
     if (!paths.length) return
-    paths.forEach((path) => urlRequestsRef.current.add(path))
-    window.sylunae.images.getUrls(paths).then((next) => {
+    paths.forEach((path) => thumbnailUrlRequestsRef.current.add(path))
+    window.sylunae.images.getThumbnailUrls(paths).then((next) => {
       if (!mountedRef.current) return
-      setUrls((current) => ({ ...current, ...next }))
+      setThumbnailUrls((current) => ({ ...current, ...next }))
       setFailedPaths((current) => {
         const failed = new Set(current)
         paths.forEach((path) => next[path] ? failed.delete(path) : failed.add(path))
         return failed
       })
     }).catch(() => { if (mountedRef.current) setFailedPaths((current) => new Set([...current, ...paths])) })
-      .finally(() => paths.forEach((path) => urlRequestsRef.current.delete(path)))
+      .finally(() => paths.forEach((path) => thumbnailUrlRequestsRef.current.delete(path)))
   }, [pagedVisible])
+
+  const requestOriginalUrl = (path: string) => {
+    if (!window.sylunae || urls[path] || fullUrlRequestsRef.current.has(path)) return
+    fullUrlRequestsRef.current.add(path)
+    window.sylunae.images.getUrls([path]).then((next) => {
+      if (!mountedRef.current) return
+      setUrls((current) => ({ ...current, ...next }))
+      if (!next[path]) setFailedPaths((current) => new Set(current).add(path))
+    }).catch(() => {
+      if (mountedRef.current) setFailedPaths((current) => new Set(current).add(path))
+    }).finally(() => fullUrlRequestsRef.current.delete(path))
+  }
+
+  useEffect(() => {
+    if (!window.sylunae || !selected || selected.missing || urls[selected.path] || fullUrlRequestsRef.current.has(selected.path)) return
+    requestOriginalUrl(selected.path)
+  }, [selected, urls])
+
+  const handleCardImageError = (path: string, usedOriginal: boolean) => {
+    if (usedOriginal) {
+      setFailedPaths((current) => new Set(current).add(path))
+      return
+    }
+    setThumbnailFallbackPaths((current) => new Set(current).add(path))
+    requestOriginalUrl(path)
+  }
 
   const toggleSelected = (assetId: string) => {
     setSelectedIds((current) => {
@@ -376,9 +405,11 @@ export function ImageGalleryPage() {
         </div>}
         {library.assets.length === 0 ? <div className="image-gallery-empty"><span><Images size={28} /></span><h2>建立你的私人图片收藏</h2><p>选择一张或多张本地图片建立索引，原始文件不会被移动、复制或修改。</p><Button onClick={() => void addImages()}><Plus size={16} />添加第一批图片</Button></div> : visible.length === 0 ? <div className="image-gallery-empty compact"><span><Search size={25} /></span><h2>没有找到图片</h2><p>可以调整筛选条件，或者向当前收藏夹添加图片。</p><Button onClick={() => void addImages()}><Plus size={16} />添加图片</Button></div> : <><div className={`image-gallery-grid ${selectedIds.size ? 'selecting' : ''}`}>{pagedVisible.map((asset) => {
           const isSelected = selectedIds.has(asset.id)
+          const useOriginal = thumbnailFallbackPaths.has(asset.path)
+          const imageUrl = useOriginal ? urls[asset.path] : thumbnailUrls[asset.path]
           return <div key={asset.id} role="button" tabIndex={0} aria-label={`${isSelected ? '取消选择' : selectedIds.size ? '选择' : '查看'} ${asset.name}`} aria-pressed={selectedIds.size ? isSelected : undefined} className={`image-gallery-card ${asset.missing ? 'missing' : ''} ${isSelected ? 'selected' : ''}`} style={{ aspectRatio: `${Math.max(1, asset.width)} / ${Math.max(1, asset.height)}` }} onClick={() => openAsset(asset)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openAsset(asset) } }}>
             <Checkbox className="image-card-checkbox" checked={isSelected} aria-label={`${isSelected ? '取消选择' : '选择'} ${asset.name}`} onClick={(event) => event.stopPropagation()} onCheckedChange={() => toggleSelected(asset.id)} />
-            {asset.missing ? <span className="image-missing"><AlertCircle size={22} />文件已移动或删除</span> : <>{urls[asset.path] && !failedPaths.has(asset.path) && <img className={loadedPaths.has(asset.path) ? 'loaded' : ''} src={urls[asset.path]} alt={asset.name} loading="lazy" onLoad={() => setLoadedPaths((current) => new Set(current).add(asset.path))} onError={() => setFailedPaths((current) => new Set(current).add(asset.path))} />}{!loadedPaths.has(asset.path) && !failedPaths.has(asset.path) && <span className="image-card-loading" aria-label="正在加载图片"><i /></span>}{failedPaths.has(asset.path) && <span className="image-card-unavailable"><AlertCircle size={22} />图片暂时无法加载</span>}</>}
+            {asset.missing ? <span className="image-missing"><AlertCircle size={22} />文件已移动或删除</span> : <>{imageUrl && !failedPaths.has(asset.path) && <img className={loadedPaths.has(asset.path) ? 'loaded' : ''} src={imageUrl} alt={asset.name} loading="lazy" decoding="async" onLoad={() => setLoadedPaths((current) => new Set(current).add(asset.path))} onError={() => handleCardImageError(asset.path, useOriginal)} />}{!loadedPaths.has(asset.path) && !failedPaths.has(asset.path) && <span className="image-card-loading" aria-label="正在加载图片"><i /></span>}{failedPaths.has(asset.path) && <span className="image-card-unavailable"><AlertCircle size={22} />图片暂时无法加载</span>}</>}
             <span className="image-card-overlay"><strong className="private-image-name">{asset.name}</strong><small>{typeLabels[asset.aspectType]} · {asset.width} × {asset.height}</small></span>
           </div>
         })}</div><ContentPagination page={page} pageCount={pageCount} onPageChange={setPage} scrollTargetRef={contentRef} /></>}

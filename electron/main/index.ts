@@ -33,6 +33,10 @@ const sessionMediaPaths = new Set<string>()
 const sessionDownloadDirectories = new Set<string>()
 const sessionImageRootPaths = new Set<string>()
 const cancelledImageScans = new Set<string>()
+const IMAGE_THUMBNAIL_MAX_EDGE = 960
+const IMAGE_THUMBNAIL_CACHE_LIMIT = 256 * 1024 * 1024
+const imageThumbnailRequests = new Map<string, Promise<Buffer>>()
+let imageThumbnailPrune: Promise<void> | null = null
 let tagLibPromise: ReturnType<typeof initializeTagLib> | null = null
 const MAX_REMOTE_AUDIO_BYTES = 1024 * 1024 * 1024
 type ProgressReporter = (progress: Omit<MusicImportProgress, 'taskId' | 'source'>) => void
@@ -48,10 +52,65 @@ function isIndexedPath(filePath: string): boolean {
     || snapshot.settings.pomodoroAlarmPath === filePath
     || snapshot.tracks.some((track) => track.path === filePath)
     || snapshot.imageLibrary?.assets.some((asset) => asset.path === filePath)
+    || snapshot.countdowns.some((event) => event.coverImagePath === filePath)
 }
 
 function pathKey(filePath: string): string {
   return process.platform === 'win32' ? resolve(filePath).toLocaleLowerCase() : resolve(filePath)
+}
+
+function imageThumbnailDirectory(): string {
+  return join(app.getPath('userData'), 'image-thumbnails')
+}
+
+async function pruneImageThumbnailCache(): Promise<void> {
+  if (imageThumbnailPrune) return imageThumbnailPrune
+  imageThumbnailPrune = (async () => {
+    try {
+      const directory = imageThumbnailDirectory()
+      const entries = await readdir(directory, { withFileTypes: true })
+      const files = (await Promise.all(entries.filter((entry) => entry.isFile() && entry.name.endsWith('.png')).map(async (entry) => {
+        const filePath = join(directory, entry.name)
+        try {
+          const details = await stat(filePath)
+          return { filePath, size: details.size, mtimeMs: details.mtimeMs }
+        } catch { return null }
+      }))).filter((item): item is { filePath: string; size: number; mtimeMs: number } => item !== null)
+      let total = files.reduce((sum, file) => sum + file.size, 0)
+      for (const file of files.sort((left, right) => left.mtimeMs - right.mtimeMs)) {
+        if (total <= IMAGE_THUMBNAIL_CACHE_LIMIT) break
+        try { unlinkSync(file.filePath); total -= file.size } catch { /* Cache cleanup is best-effort. */ }
+      }
+    } catch { /* The thumbnail cache is optional. */ }
+    finally { imageThumbnailPrune = null }
+  })()
+  return imageThumbnailPrune
+}
+
+async function getImageThumbnail(filePath: string): Promise<Buffer> {
+  const details = statSync(filePath)
+  const key = createHash('sha256').update(`${pathKey(filePath)}:${details.size}:${details.mtimeMs}:${IMAGE_THUMBNAIL_MAX_EDGE}`).digest('hex')
+  const cachePath = join(imageThumbnailDirectory(), `${key}.png`)
+  if (existsSync(cachePath)) return readFileSync(cachePath)
+
+  const pending = imageThumbnailRequests.get(key)
+  if (pending) return pending
+  const request = Promise.resolve().then(() => {
+    const source = nativeImage.createFromPath(filePath)
+    if (source.isEmpty()) throw new Error('无法读取图片')
+    const { width, height } = source.getSize()
+    const scale = Math.min(1, IMAGE_THUMBNAIL_MAX_EDGE / Math.max(width, height))
+    const thumbnail = scale < 1
+      ? source.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'best' })
+      : source
+    const buffer = thumbnail.toPNG()
+    mkdirSync(imageThumbnailDirectory(), { recursive: true })
+    writeFileSync(cachePath, buffer)
+    void pruneImageThumbnailCache()
+    return buffer
+  }).finally(() => imageThumbnailRequests.delete(key))
+  imageThumbnailRequests.set(key, request)
+  return request
 }
 
 function aspectType(width: number, height: number): ImageAspectType {
@@ -804,6 +863,18 @@ function registerIpc(): void {
     }
     return assets
   })
+  ipcMain.handle('images:pick-file', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择倒数日背景图片',
+      properties: ['openFile'],
+      filters: [{ name: '图片文件', extensions: [...IMAGE_EXTENSIONS].map((value) => value.slice(1)) }],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    const filePath = resolve(result.filePaths[0])
+    if (!existsSync(filePath) || !IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())) return null
+    sessionMediaPaths.add(filePath)
+    return { path: filePath, name: basename(filePath) }
+  })
   ipcMain.handle('images:pick-root', async (_event, recursive: boolean) => {
     const result = await dialog.showOpenDialog({ title: '选择图片收藏夹', properties: ['openDirectory'] })
     if (result.canceled || !result.filePaths[0]) return null
@@ -872,10 +943,22 @@ function registerIpc(): void {
   ipcMain.handle('images:get-urls', (_event, paths: string[]) => {
     const snapshot = loadSnapshot()
     const indexedImagePaths = new Set((snapshot.imageLibrary?.assets ?? []).map((asset) => pathKey(asset.path)))
+    for (const event of snapshot.countdowns) if (event.coverImagePath) indexedImagePaths.add(pathKey(event.coverImagePath))
     return Object.fromEntries(paths.flatMap((filePath) => {
       const authorized = sessionMediaPaths.has(filePath) || indexedImagePaths.has(pathKey(filePath))
       if (!authorized || !existsSync(filePath) || !IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())) return []
       return [[filePath, `sylunae-media://image/${Buffer.from(filePath).toString('base64url')}`]]
+    }))
+  })
+  ipcMain.handle('images:get-thumbnail-urls', (_event, paths: string[]) => {
+    const snapshot = loadSnapshot()
+    const indexedImagePaths = new Set((snapshot.imageLibrary?.assets ?? []).map((asset) => pathKey(asset.path)))
+    for (const event of snapshot.countdowns) if (event.coverImagePath) indexedImagePaths.add(pathKey(event.coverImagePath))
+    return Object.fromEntries(paths.flatMap((filePath) => {
+      const authorized = sessionMediaPaths.has(filePath) || indexedImagePaths.has(pathKey(filePath))
+      if (!authorized || !existsSync(filePath) || !IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())) return []
+      const details = statSync(filePath)
+      return [[filePath, `sylunae-media://thumbnail/${Buffer.from(filePath).toString('base64url')}?v=${details.size}-${details.mtimeMs}`]]
     }))
   })
 
@@ -934,11 +1017,18 @@ app.whenReady().then(() => {
   protocol.handle('sylunae-media', async (request) => {
     const requestOrigin = request.headers.get('Origin')
     if (requestOrigin && requestOrigin !== rendererOrigin) return new Response('Forbidden', { status: 403 })
-    const encoded = new URL(request.url).pathname.slice(1)
+    const url = new URL(request.url)
+    const encoded = url.pathname.slice(1)
     const filePath = Buffer.from(encoded, 'base64url').toString('utf8')
     const extension = extname(filePath).toLowerCase()
     if (!isIndexedPath(filePath) || !existsSync(filePath) || (!AUDIO_EXTENSIONS.has(extension) && !IMAGE_EXTENSIONS.has(extension))) {
       return new Response('Not found', { status: 404 })
+    }
+    if (url.hostname === 'thumbnail') {
+      try {
+        const thumbnail = await getImageThumbnail(filePath)
+        return new Response(new Uint8Array(thumbnail), { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin': rendererOrigin } })
+      } catch { return new Response('Not found', { status: 404 }) }
     }
     const size = statSync(filePath).size
     const headers = new Headers({

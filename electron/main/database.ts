@@ -6,6 +6,7 @@ import { createDefaultSnapshot } from '../../src/shared/defaults'
 import type { AppSnapshot } from '../../src/shared/types'
 import { normalizeThemePalettes } from '../../src/shared/theme'
 import { normalizeImageLibrary } from '../../src/images/library'
+import { normalizeCountdowns } from '../../src/countdowns/normalize'
 import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot } from '../../src/data/snapshotSections'
 import type { AppSnapshotPatch } from '../../src/shared/types'
 
@@ -75,6 +76,7 @@ function migrateSectionStorage(db: Database.Database): void {
 
 function normalizeSnapshot(parsed: Partial<AppSnapshot>): AppSnapshot {
   const defaults = createDefaultSnapshot()
+  const imageLibrary = normalizeImageLibrary(parsed.imageLibrary)
   const legacyTool = parsed.settings?.lastTool as string | undefined
   const migratedTool = legacyTool === 'goals' ? 'tasks' : legacyTool === 'library' ? 'collection' : legacyTool
   const lastTool = ['home', 'tasks', 'notes', 'music', 'collection', 'tools', 'settings'].includes(migratedTool ?? '') ? migratedTool! : defaults.settings.lastTool
@@ -83,10 +85,13 @@ function normalizeSnapshot(parsed: Partial<AppSnapshot>): AppSnapshot {
     ...parsed,
     settings: { ...defaults.settings, ...parsed.settings, lastTool: lastTool as AppSnapshot['settings']['lastTool'], themePalettes: normalizeThemePalettes(parsed.settings?.themePalettes) },
     todos: parsed.todos ?? [],
+    recurringTodos: parsed.recurringTodos ?? [],
+    todoCompletionRecords: parsed.todoCompletionRecords ?? [],
     pomodoro: { ...defaults.pomodoro, ...parsed.pomodoro },
+    countdowns: normalizeCountdowns(parsed.countdowns ?? [], imageLibrary.assets),
     clipboardSnippets: parsed.clipboardSnippets ?? [],
     launcherLinks: parsed.launcherLinks ?? [],
-    imageLibrary: normalizeImageLibrary(parsed.imageLibrary),
+    imageLibrary,
   }
 }
 

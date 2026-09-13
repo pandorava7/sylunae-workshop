@@ -47,7 +47,7 @@ describe('desktop section storage', () => {
 
     const verification = new Database(path, { readonly: true })
     const rows = verification.prepare('SELECT section, payload FROM app_state_sections').all() as Array<{ section: string; payload: string }>
-    expect(rows).toHaveLength(13)
+    expect(rows).toHaveLength(16)
     expect(JSON.parse(rows.find((row) => row.section === 'notes')!.payload)).toEqual(notes)
     expect(JSON.parse(rows.find((row) => row.section === 'tracks')!.payload)).toEqual(snapshot.tracks)
     expect((verification.prepare('SELECT COUNT(*) AS count FROM app_state').get() as { count: number }).count).toBe(0)

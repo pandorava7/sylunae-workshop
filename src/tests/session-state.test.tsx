@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useSessionState } from '../lib/usePersistentState'
 
 function SessionStateHarness() {
@@ -11,6 +11,7 @@ function SessionStateHarness() {
 
 describe('session navigation state', () => {
   beforeEach(() => window.sessionStorage.clear())
+  afterEach(cleanup)
 
   it('starts at home in a new window session', () => {
     render(<SessionStateHarness />)

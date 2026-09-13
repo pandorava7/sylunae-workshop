@@ -93,6 +93,42 @@ describe('note editor markdown paste', () => {
     expect(looksLikeMarkdown('**粗体**')).toBe(true)
     expect(looksLikeMarkdown('普通文本')).toBe(false)
   })
+
+  it('continues a list item for every pasted plain-text line', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit, MarkdownPaste],
+      content: {
+        type: 'doc',
+        content: [{
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '已有内容' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph' }] },
+          ],
+        }],
+      },
+    })
+
+    editor.commands.focus('end')
+    const event = pasteEvent('第一行\n第二行\n第三行')
+    editor.view.dom.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(editor.getJSON().content?.[0]).toMatchObject(
+      {
+        type: 'bulletList',
+        content: [
+          { content: [{ content: [{ text: '已有内容' }] }] },
+          { content: [{ content: [{ text: '第一行' }] }] },
+          { content: [{ content: [{ text: '第二行' }] }] },
+          { content: [{ content: [{ text: '第三行' }] }] },
+        ],
+      },
+    )
+
+    editor.destroy()
+  })
 })
 
 describe('note updates', () => {

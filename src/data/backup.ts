@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { AppSettings, AppSnapshot, BackupEnvelope, PartialBackupEnvelope, PartialBackupSection } from '../shared/types'
 import { normalizeThemePalettes } from '../shared/theme'
 import { normalizeImageLibrary } from '../images/library'
+import { normalizeCountdowns } from '../countdowns/normalize'
 
 const timestamp = z.string().min(1)
 const jsonContentSchema: z.ZodType<Record<string, unknown>> = z.lazy(() => z.object({ type: z.string().optional(), text: z.string().optional(), attrs: z.record(z.string(), z.unknown()).optional(), marks: z.array(z.unknown()).optional(), content: z.array(jsonContentSchema).optional() }).passthrough())
@@ -44,7 +45,20 @@ const milestoneSchema = z.object({ id: z.string(), title: z.string(), dueDate: z
 const goalCheckInSchema = z.object({ id: z.string(), progress: z.number().min(0).max(100), confidence: z.number().min(1).max(5), note: z.string(), nextStep: z.string(), createdAt: timestamp })
 const goalSchema = z.object({ id: z.string(), title: z.string(), description: z.string(), motivation: z.string().optional().default(''), status: z.enum(['active', 'paused', 'completed', 'archived']), parentId: z.string().nullable().optional().default(null), startDate: z.string(), dueDate: z.string(), progressMode: z.enum(['manual', 'metric', 'milestones', 'subgoals']).optional().default('milestones'), manualProgress: z.number().min(0).max(100).optional().default(0), metricStart: z.number().optional().default(0), metricCurrent: z.number().optional().default(0), metricTarget: z.number().optional().default(100), metricUnit: z.string().optional().default(''), reviewCadence: z.enum(['weekly', 'monthly', 'none']).optional().default('weekly'), nextReviewDate: z.string().optional().default(''), checkIns: z.array(goalCheckInSchema).optional().default([]), milestones: z.array(milestoneSchema), createdAt: timestamp, updatedAt: timestamp })
 const todoSchema = z.object({ id: z.string(), title: z.string(), goalId: z.string().optional(), priority: z.enum(['low', 'medium', 'high']), dueDate: z.string(), completed: z.boolean(), completedAt: timestamp.nullable().optional().default(null), createdAt: timestamp, updatedAt: timestamp })
+const recurringTodoSchema = z.object({
+  id: z.string(), title: z.string(), priority: z.enum(['low', 'medium', 'high']), frequency: z.enum(['daily', 'weekly', 'monthly', 'interval']), startDate: z.string(),
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(), dayOfMonth: z.number().int().min(1).max(31).optional(), intervalDays: z.number().int().positive().optional(),
+  paused: z.boolean().optional().default(false), createdAt: timestamp, updatedAt: timestamp,
+})
+const todoCompletionRecordSchema = z.object({ id: z.string(), recurringTodoId: z.string(), occurrenceDate: z.string(), completedAt: timestamp })
 const pomodoroSchema = z.object({ mode: z.enum(['focus', 'shortBreak', 'longBreak']), focusMinutes: z.number(), shortBreakMinutes: z.number(), longBreakMinutes: z.number(), sessionsBeforeLongBreak: z.number(), completedSessions: z.number(), secondsRemaining: z.number(), running: z.boolean(), endsAt: z.string().nullable() })
+const countdownSchema = z.object({
+  id: z.string(), title: z.string(), targetDate: z.string(), category: z.enum(['birthday', 'anniversary', 'travel', 'event', 'other']), note: z.string(),
+  yearly: z.boolean().optional(), targetTime: z.string().optional().default('09:00'), precise: z.boolean().optional().default(false),
+  repeat: z.enum(['none', 'weekly', 'monthly', 'yearly']).optional(), mode: z.enum(['auto', 'countdown', 'countup']).optional().default('auto'),
+  includeStartDay: z.boolean().optional().default(false), accent: z.enum(['neutral', 'rose', 'amber', 'sage', 'sky']).optional().default('neutral'),
+  coverImagePath: z.string().optional().default(''), coverImageId: z.string().optional(), pinned: z.boolean(), createdAt: timestamp, updatedAt: timestamp,
+}).transform((event) => ({ ...event, repeat: event.repeat ?? (event.yearly ? 'yearly' as const : 'none' as const) }))
 const clipboardSchema = z.object({ id: z.string(), title: z.string(), content: z.string(), category: z.string(), copyCount: z.number().int().nonnegative().optional().default(0), createdAt: timestamp, updatedAt: timestamp })
 const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), faviconUrl: z.string().optional(), archived: z.boolean().optional().default(false), createdAt: timestamp, updatedAt: timestamp })
 const imageRootSchema = z.object({ id: z.string(), path: z.string(), name: z.string(), recursive: z.boolean(), identity: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp, lastScannedAt: timestamp.nullable(), collectionId: z.string().nullable().optional() })
@@ -65,7 +79,10 @@ const envelopeSchema = z.object({
     notes: z.array(noteSchema),
     goals: z.array(goalSchema),
     todos: z.array(todoSchema).optional().default([]),
+    recurringTodos: z.array(recurringTodoSchema).optional().default([]),
+    todoCompletionRecords: z.array(todoCompletionRecordSchema).optional().default([]),
     pomodoro: pomodoroSchema.optional().default({ mode: 'focus', focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, sessionsBeforeLongBreak: 4, completedSessions: 0, secondsRemaining: 1500, running: false, endsAt: null }),
+    countdowns: z.array(countdownSchema).optional().default([]),
     clipboardSnippets: z.array(clipboardSchema).optional().default([]),
     launcherLinks: z.array(launcherSchema).optional().default([]),
     imageLibrary: z.object({ roots: z.array(imageRootSchema), collections: z.array(imageCollectionSchema).optional().default([]), assets: z.array(imageAssetSchema) }).optional().default({ roots: [], collections: [], assets: [] }),
@@ -76,7 +93,7 @@ const partialSections = ['home', 'tasks', 'notes', 'music', 'collection', 'tools
 const imageLibrarySchema = z.object({ roots: z.array(imageRootSchema), collections: z.array(imageCollectionSchema).optional().default([]), assets: z.array(imageAssetSchema) })
 const partialPayloadSchemas: Record<PartialBackupSection, z.ZodType> = {
   home: z.object({ displayName: z.string(), homeWallpaper: z.string(), homeWallpapers: z.array(homeWallpaperSchema), homeQuickActions: z.array(z.enum(['new-note', 'new-todo', 'pomodoro', 'music', 'collection'])), weatherLocation: weatherLocationSchema, weatherCache: weatherSnapshotSchema.nullable() }),
-  tasks: z.object({ goals: z.array(goalSchema), todos: z.array(todoSchema), pomodoro: pomodoroSchema }),
+  tasks: z.object({ goals: z.array(goalSchema), todos: z.array(todoSchema), recurringTodos: z.array(recurringTodoSchema).optional().default([]), todoCompletionRecords: z.array(todoCompletionRecordSchema).optional().default([]), pomodoro: pomodoroSchema, countdowns: z.array(countdownSchema).optional().default([]) }),
   notes: z.object({ folders: z.array(folderSchema), notes: z.array(noteSchema) }),
   music: z.object({ tracks: z.array(trackSchema), albums: z.array(albumSchema) }),
   collection: z.object({ bangumi: z.object({ username: z.string(), items: z.array(bangumiItemSchema), syncedAt: timestamp }).nullable(), bangumiUsername: z.string() }),
@@ -90,7 +107,7 @@ export function createBackup(snapshot: AppSnapshot): BackupEnvelope {
 
 export const partialBackupSectionMeta: Array<{ id: PartialBackupSection; label: string; description: string }> = [
   { id: 'home', label: '首页', description: '主页资料、壁纸、天气与快捷入口' },
-  { id: 'tasks', label: '任务箱', description: '目标、待办与番茄钟' },
+  { id: 'tasks', label: '任务箱', description: '目标、待办、番茄钟与倒数日' },
   { id: 'notes', label: '笔记本', description: '笔记与文件夹' },
   { id: 'music', label: '音乐库', description: '音乐和专辑索引，不含原始文件' },
   { id: 'collection', label: '收藏馆', description: 'Bangumi 收藏缓存与用户名' },
@@ -101,7 +118,7 @@ export const partialBackupSectionMeta: Array<{ id: PartialBackupSection; label: 
 export function createPartialBackup(snapshot: AppSnapshot, section: PartialBackupSection): PartialBackupEnvelope {
   const payload: Record<PartialBackupSection, unknown> = {
     home: (({ displayName, homeWallpaper, homeWallpapers, homeQuickActions, weatherLocation, weatherCache }) => ({ displayName, homeWallpaper, homeWallpapers, homeQuickActions, weatherLocation, weatherCache }))(snapshot.settings),
-    tasks: (({ goals, todos, pomodoro }) => ({ goals, todos, pomodoro }))(snapshot),
+    tasks: (({ goals, todos, recurringTodos, todoCompletionRecords, pomodoro, countdowns }) => ({ goals, todos, recurringTodos, todoCompletionRecords, pomodoro, countdowns }))(snapshot),
     notes: (({ folders, notes }) => ({ folders, notes }))(snapshot),
     music: (({ tracks, albums }) => ({ tracks, albums }))(snapshot),
     collection: { bangumi: snapshot.bangumi, bangumiUsername: snapshot.settings.bangumiUsername },
@@ -123,7 +140,10 @@ export function applyPartialBackup(current: AppSnapshot, backup: PartialBackupEn
   const updatedAt = new Date().toISOString()
   switch (backup.section) {
     case 'home': return { ...current, settings: { ...current.settings, ...(backup.payload as Pick<AppSettings, 'displayName' | 'homeWallpaper' | 'homeWallpapers' | 'homeQuickActions' | 'weatherLocation' | 'weatherCache'>), updatedAt } }
-    case 'tasks': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'goals' | 'todos' | 'pomodoro'>) }
+    case 'tasks': {
+      const payload = backup.payload as Pick<AppSnapshot, 'goals' | 'todos' | 'recurringTodos' | 'todoCompletionRecords' | 'pomodoro' | 'countdowns'>
+      return { ...current, ...payload, countdowns: normalizeCountdowns(payload.countdowns, current.imageLibrary.assets) }
+    }
     case 'notes': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'folders' | 'notes'>) }
     case 'music': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'tracks' | 'albums'>) }
     case 'collection': {
@@ -141,12 +161,14 @@ export function partialBackupSummary(backup: PartialBackupEnvelope): string {
 
 export function parseBackup(contents: string): BackupEnvelope {
   const backup = envelopeSchema.parse(JSON.parse(contents))
+  const imageLibrary = normalizeImageLibrary(backup.snapshot.imageLibrary)
   return {
     ...backup,
     snapshot: {
       ...backup.snapshot,
       settings: { ...backup.snapshot.settings, themePalettes: normalizeThemePalettes(backup.snapshot.settings.themePalettes) },
-      imageLibrary: normalizeImageLibrary(backup.snapshot.imageLibrary),
+      countdowns: normalizeCountdowns(backup.snapshot.countdowns, imageLibrary.assets),
+      imageLibrary,
     },
   } as BackupEnvelope
 }
