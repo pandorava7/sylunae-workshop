@@ -59,10 +59,13 @@ function TodoPanel() {
   const [draft, setDraft] = useState('')
   const [routineDialogOpen, setRoutineDialogOpen] = useState(false)
   const [editingRoutine, setEditingRoutine] = useState<RecurringTodo | null>(null)
+  const [showAllRoutines, setShowAllRoutines] = useState(false)
+  const [routineSaveNotice, setRoutineSaveNotice] = useState('')
   const today = useTodayKey()
   const inputRef = useRef<HTMLInputElement>(null)
   const visible = useMemo(() => [...todos].sort((a, b) => Number(a.completed) - Number(b.completed) || (a.completed ? (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt) : b.createdAt.localeCompare(a.createdAt))), [todos])
   const todayRoutines = useMemo(() => routines.filter((routine) => occursOnDate(routine, today)), [routines, today])
+  const displayedRoutines = showAllRoutines ? routines : todayRoutines
   useEffect(() => {
     const timer = window.setTimeout(() => inputRef.current?.focus(), 50)
     return () => window.clearTimeout(timer)
@@ -85,6 +88,7 @@ function TodoPanel() {
   }
   const routineCompletion = (routineId: string) => completionRecords.find((record) => record.recurringTodoId === routineId && record.occurrenceDate === today)
   const toggleRoutine = (routine: RecurringTodo, target: HTMLButtonElement) => {
+    if (!occursOnDate(routine, today)) return
     const completion = routineCompletion(routine.id)
     if (completion) { update((state) => ({ ...state, todoCompletionRecords: state.todoCompletionRecords.filter((record) => record.id !== completion.id) })); return }
     const rect = target.getBoundingClientRect()
@@ -95,6 +99,7 @@ function TodoPanel() {
     const now = nowIso()
     if (editingRoutine) update((state) => ({ ...state, recurringTodos: state.recurringTodos.map((routine) => routine.id === editingRoutine.id ? { ...routine, ...draftRoutine, updatedAt: now } : routine) }))
     else update((state) => ({ ...state, recurringTodos: [...state.recurringTodos, { ...draftRoutine, id: newId(), createdAt: now, updatedAt: now }] }))
+    setRoutineSaveNotice(editingRoutine ? '例行待办已保存。' : '例行待办已添加；可在“全部例行”中随时查看。')
     setEditingRoutine(null)
     setRoutineDialogOpen(false)
   }
@@ -115,11 +120,13 @@ function TodoPanel() {
   const insight = !openTodos.length ? '待办清单清理完毕，好棒好棒！' : oldestDays >= 7 ? `“${oldest.title}”已经停留 ${oldestDays} 天，也许可以把它拆小或删掉。` : openTodos.length > 8 ? '清单有点拥挤，先选一件两分钟内能完成的小事吧。' : '清单保持轻盈，完成一件就会为下一件腾出空间。'
   return <div className="task-panel todo-panel">
     <div className="panel-heading"><div><h2>今日清单</h2><p>{todayRoutines.length ? `${todayRoutines.length} 件例行事项，完成后明天会自动焕新` : '添加例行事项，让每天从轻松的一步开始'}</p></div><span className="todo-completion-count"><Check size={14} />今天完成 {completedToday}</span></div>
-    <div className="todo-routine-toolbar"><span>例行待办</span><Button variant="outline" size="sm" onClick={() => { setEditingRoutine(null); setRoutineDialogOpen(true) }}><Repeat2 size={14} />添加例行</Button></div>
-    <div className="todo-list routine-list">{todayRoutines.length ? todayRoutines.map((routine) => {
+    <div className="todo-routine-toolbar"><span>{showAllRoutines ? `全部例行 · ${routines.length}` : '例行待办'}</span><div className="todo-routine-actions"><Button type="button" variant="ghost" size="sm" onClick={() => setShowAllRoutines((current) => !current)}><CalendarDays size={14} />{showAllRoutines ? '今日清单' : '全部例行'}</Button><Button type="button" variant="outline" size="sm" onClick={() => { setEditingRoutine(null); setRoutineDialogOpen(true) }}><Repeat2 size={14} />添加例行</Button></div></div>
+    {routineSaveNotice && <p className="routine-save-notice" role="status">{routineSaveNotice}</p>}
+    <div className="todo-list routine-list">{displayedRoutines.length ? displayedRoutines.map((routine) => {
       const completion = routineCompletion(routine.id)
-      return <div className={`todo-row ${completion ? 'completed' : ''}`} key={routine.id}><button className="todo-check" onClick={(event) => toggleRoutine(routine, event.currentTarget)} aria-label={completion ? '恢复例行待办' : '完成例行待办'}>{completion ? <Check size={16} /> : <Circle size={18} />}</button><div className="todo-copy"><strong className="todo-title user-content">{routine.title}</strong><div className="todo-meta-line"><span className="todo-routine-tag"><Repeat2 size={11} />{recurringLabel(routine)}</span>{completion && <span className="todo-time-line"><Clock3 size={11} />完成于 {formatTodoTimestamp(completion.completedAt)}</span>}</div></div><button className="icon-button todo-routine-edit" onClick={() => { setEditingRoutine(routine); setRoutineDialogOpen(true) }} aria-label="编辑例行待办"><Pencil size={15} /></button></div>
-    }) : <div className="routine-empty"><Repeat2 size={18} /><span>把每天、每周或每月都会做的事放在这里。</span></div>}</div>
+      const dueToday = occursOnDate(routine, today)
+      return <div className={`todo-row ${completion ? 'completed' : ''}`} key={routine.id}><button className={`todo-check ${dueToday ? '' : 'routine-not-due'}`} onClick={(event) => toggleRoutine(routine, event.currentTarget)} disabled={!dueToday} aria-label={dueToday ? (completion ? '恢复例行待办' : '完成例行待办') : '今天不需要完成'}>{completion ? <Check size={16} /> : <Circle size={18} />}</button><div className="todo-copy"><strong className="todo-title user-content">{routine.title}</strong><div className="todo-meta-line"><span className="todo-routine-tag"><Repeat2 size={11} />{recurringLabel(routine)}</span>{!dueToday && <span className="todo-time-line">今天不需要完成</span>}{completion && <span className="todo-time-line"><Clock3 size={11} />完成于 {formatTodoTimestamp(completion.completedAt)}</span>}</div></div><button className="icon-button todo-routine-edit" onClick={() => { setEditingRoutine(routine); setRoutineDialogOpen(true) }} aria-label="编辑例行待办"><Pencil size={15} /></button></div>
+    }) : <div className="routine-empty"><Repeat2 size={18} /><span>{showAllRoutines ? '还没有例行待办，添加一件规律的小事吧。' : '今天没有例行待办；可切换到全部例行查看后续安排。'}</span></div>}</div>
     <div className="todo-section-heading"><span>临时待办</span><small>想到就记，完成就划掉</small></div>
     <div className="todo-quick-composer"><Plus size={19} /><Input ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) add() }} placeholder="现在要做什么？按 Enter 添加" aria-label="快速添加待办" /><kbd>Enter</kbd></div>
     <div className="todo-list quick-list">{visible.length ? visible.map((todo) => <div className={`todo-row ${todo.completed ? 'completed' : ''}`} key={todo.id}>

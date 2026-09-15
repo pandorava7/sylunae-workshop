@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CalendarPlus, CheckSquare2, ChevronRight, FolderInput, FolderOpen, HardDrive, Image as ImageIcon, Images, LocateFixed, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { AlertCircle, CalendarPlus, CheckSquare2, ChevronRight, FolderInput, FolderOpen, HardDrive, Image as ImageIcon, Images, LocateFixed, Maximize2, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import { usePersistentState } from '../lib/usePersistentState'
 import { Button } from '../components/ui/button'
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ContentPagination } from '../components/ContentPagination'
+import { ImageViewer } from '../components/ImageViewer'
 import { PromptDialog } from '../components/PromptDialog'
 import { Checkbox } from '../components/ui/checkbox'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
@@ -43,6 +44,7 @@ function formatScanTime(value: string | null): string {
 
 export function ImageGalleryPage() {
   const contentRef = useRef<HTMLDivElement>(null)
+  const galleryGridRef = useRef<HTMLDivElement>(null)
   const { snapshot, update } = useAppStore()
   const library = snapshot?.imageLibrary ?? { roots: [], collections: [], assets: [] }
   const [selectedCollection, setSelectedCollection] = useState('all')
@@ -52,6 +54,12 @@ export function ImageGalleryPage() {
   const [page, setPage] = useState(1)
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({})
+  const [thumbnailEdges, setThumbnailEdges] = useState<Record<string, number>>({})
+  const [thumbnailLayout, setThumbnailLayout] = useState({ columnWidth: 0, dpr: 1 })
+  const [detailPreviewElement, setDetailPreviewElement] = useState<HTMLButtonElement | null>(null)
+  const [detailThumbnail, setDetailThumbnail] = useState<{ path: string; edge: number; url: string } | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerThumbnail, setViewerThumbnail] = useState<{ path: string; edge: number; url: string } | null>(null)
   const [thumbnailFallbackPaths, setThumbnailFallbackPaths] = useState<Set<string>>(() => new Set())
   const [loadedPaths, setLoadedPaths] = useState<Set<string>>(() => new Set())
   const [failedPaths, setFailedPaths] = useState<Set<string>>(() => new Set())
@@ -169,21 +177,53 @@ export function ImageGalleryPage() {
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   useEffect(() => {
+    const grid = galleryGridRef.current
+    if (!grid) return
+    const updateLayout = () => {
+      const styles = getComputedStyle(grid)
+      const columnCount = Math.max(1, Number.parseInt(styles.columnCount, 10) || 1)
+      const columnGap = Number.parseFloat(styles.columnGap) || 0
+      const columnWidth = Math.max(1, (grid.clientWidth - columnGap * (columnCount - 1)) / columnCount)
+      const dpr = window.devicePixelRatio || 1
+      setThumbnailLayout((current) => Math.abs(current.columnWidth - columnWidth) < 0.5 && current.dpr === dpr ? current : { columnWidth, dpr })
+    }
+    updateLayout()
+    const observer = new ResizeObserver(updateLayout)
+    observer.observe(grid)
+    window.addEventListener('resize', updateLayout)
+    return () => { observer.disconnect(); window.removeEventListener('resize', updateLayout) }
+  }, [pagedVisible.length])
+
+  useEffect(() => {
     if (!window.sylunae) return
-    const paths = pagedVisible.filter((asset) => !asset.missing && !thumbnailUrls[asset.path] && !thumbnailUrlRequestsRef.current.has(asset.path)).map((asset) => asset.path)
-    if (!paths.length) return
-    paths.forEach((path) => thumbnailUrlRequestsRef.current.add(path))
-    window.sylunae.images.getThumbnailUrls(paths).then((next) => {
+    if (!thumbnailLayout.columnWidth) return
+    const requests = pagedVisible.flatMap((asset) => {
+      if (asset.missing) return []
+      const renderedLongEdge = thumbnailLayout.columnWidth * Math.max(1, asset.height / Math.max(1, asset.width))
+      const maxEdge = Math.min(960, Math.ceil(renderedLongEdge * thumbnailLayout.dpr * 1.03 / 16) * 16)
+      const requestKey = `${asset.path}\0${maxEdge}`
+      if (thumbnailEdges[asset.path] === maxEdge || thumbnailUrlRequestsRef.current.has(requestKey)) return []
+      return [{ path: asset.path, maxEdge, requestKey }]
+    })
+    if (!requests.length) return
+    requests.forEach(({ requestKey }) => thumbnailUrlRequestsRef.current.add(requestKey))
+    window.sylunae.images.getThumbnailUrls(requests.map(({ path, maxEdge }) => ({ path, maxEdge }))).then((next) => {
       if (!mountedRef.current) return
       setThumbnailUrls((current) => ({ ...current, ...next }))
+      setThumbnailEdges((current) => ({ ...current, ...Object.fromEntries(requests.flatMap(({ path, maxEdge }) => next[path] ? [[path, maxEdge]] : [])) }))
+      setThumbnailFallbackPaths((current) => {
+        const fallback = new Set(current)
+        requests.forEach(({ path }) => { if (next[path]) fallback.delete(path) })
+        return fallback
+      })
       setFailedPaths((current) => {
         const failed = new Set(current)
-        paths.forEach((path) => next[path] ? failed.delete(path) : failed.add(path))
+        requests.forEach(({ path }) => next[path] ? failed.delete(path) : failed.add(path))
         return failed
       })
-    }).catch(() => { if (mountedRef.current) setFailedPaths((current) => new Set([...current, ...paths])) })
-      .finally(() => paths.forEach((path) => thumbnailUrlRequestsRef.current.delete(path)))
-  }, [pagedVisible])
+    }).catch(() => { if (mountedRef.current) setFailedPaths((current) => new Set([...current, ...requests.map(({ path }) => path)])) })
+      .finally(() => requests.forEach(({ requestKey }) => thumbnailUrlRequestsRef.current.delete(requestKey)))
+  }, [pagedVisible, thumbnailEdges, thumbnailLayout])
 
   const requestOriginalUrl = (path: string) => {
     if (!window.sylunae || urls[path] || fullUrlRequestsRef.current.has(path)) return
@@ -198,9 +238,50 @@ export function ImageGalleryPage() {
   }
 
   useEffect(() => {
-    if (!window.sylunae || !selected || selected.missing || urls[selected.path] || fullUrlRequestsRef.current.has(selected.path)) return
-    requestOriginalUrl(selected.path)
-  }, [selected, urls])
+    if (!window.sylunae || !selected || selected.missing) return
+    const preview = detailPreviewElement
+    if (!preview) return
+    let active = true
+    const selectedPath = selected.path
+    const requestPreview = () => {
+      const edge = Math.min(2560, Math.ceil(Math.max(preview.clientWidth, preview.clientHeight) * (window.devicePixelRatio || 1) * 1.03 / 16) * 16)
+      const requestKey = `detail:${selectedPath}\0${edge}`
+      if ((detailThumbnail?.path === selectedPath && detailThumbnail.edge === edge) || thumbnailUrlRequestsRef.current.has(requestKey)) return
+      thumbnailUrlRequestsRef.current.add(requestKey)
+      window.sylunae!.images.getThumbnailUrls([{ path: selectedPath, maxEdge: edge }]).then((next) => {
+        if (!active || !mountedRef.current) return
+        if (next[selectedPath]) setDetailThumbnail({ path: selectedPath, edge, url: next[selectedPath] })
+        else requestOriginalUrl(selectedPath)
+      }).catch(() => { if (active && mountedRef.current) requestOriginalUrl(selectedPath) })
+        .finally(() => thumbnailUrlRequestsRef.current.delete(requestKey))
+    }
+    requestPreview()
+    const observer = new ResizeObserver(requestPreview)
+    observer.observe(preview)
+    return () => { active = false; observer.disconnect() }
+  }, [selected?.path, detailPreviewElement, detailThumbnail])
+
+  useEffect(() => {
+    if (!window.sylunae || !viewerOpen || !selected || selected.missing) return
+    let active = true
+    const selectedPath = selected.path
+    const requestPreview = () => {
+      const viewportLongEdge = Math.max(window.innerWidth * 0.94, window.innerHeight * 0.86)
+      const edge = Math.min(2560, Math.ceil(viewportLongEdge * (window.devicePixelRatio || 1) * 1.03 / 32) * 32)
+      const requestKey = `viewer:${selectedPath}\0${edge}`
+      if ((viewerThumbnail?.path === selectedPath && viewerThumbnail.edge === edge) || thumbnailUrlRequestsRef.current.has(requestKey)) return
+      thumbnailUrlRequestsRef.current.add(requestKey)
+      window.sylunae!.images.getThumbnailUrls([{ path: selectedPath, maxEdge: edge }]).then((next) => {
+        if (!active || !mountedRef.current) return
+        if (next[selectedPath]) setViewerThumbnail({ path: selectedPath, edge, url: next[selectedPath] })
+        else requestOriginalUrl(selectedPath)
+      }).catch(() => { if (active && mountedRef.current) requestOriginalUrl(selectedPath) })
+        .finally(() => thumbnailUrlRequestsRef.current.delete(requestKey))
+    }
+    requestPreview()
+    window.addEventListener('resize', requestPreview)
+    return () => { active = false; window.removeEventListener('resize', requestPreview) }
+  }, [viewerOpen, selected?.path, viewerThumbnail])
 
   const handleCardImageError = (path: string, usedOriginal: boolean) => {
     if (usedOriginal) {
@@ -243,7 +324,7 @@ export function ImageGalleryPage() {
 
   const openAsset = (asset: ImageAsset) => {
     if (selectedIds.size) toggleSelected(asset.id)
-    else setSelected(asset)
+    else { setViewerOpen(false); setSelected(asset) }
   }
 
   const addImages = async () => {
@@ -355,6 +436,23 @@ export function ImageGalleryPage() {
 
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
   const addedThisWeek = library.assets.filter((asset) => new Date(asset.createdAt).getTime() >= weekAgo).length
+  const detailPreviewSrc = selected
+    ? detailThumbnail?.path === selected.path ? detailThumbnail.url : urls[selected.path]
+    : undefined
+  const viewerPreviewSrc = selected
+    ? viewerThumbnail?.path === selected.path ? viewerThumbnail.url : detailPreviewSrc
+    : undefined
+
+  const closeDetails = () => {
+    setViewerOpen(false)
+    setSelected(null)
+  }
+
+  const openImageViewer = () => {
+    if (!selected || selected.missing) return
+    requestOriginalUrl(selected.path)
+    setViewerOpen(true)
+  }
 
   if (!window.sylunae) return <div className="image-desktop-only"><HardDrive size={30} /><h2>精选图片仅在桌面端开放</h2><p>浏览器无法持续、安全地读取本地图片。请使用丝月工坊桌面版建立图片收藏。</p></div>
 
@@ -403,7 +501,7 @@ export function ImageGalleryPage() {
           <Button variant="ghost" size="sm" className="image-batch-remove" onClick={() => setRemoveSelectedOpen(true)}><Trash2 size={15} />移除索引</Button>
           <Button variant="ghost" size="icon-sm" aria-label="退出多选" onClick={() => setSelectedIds(new Set())}><X size={16} /></Button>
         </div>}
-        {library.assets.length === 0 ? <div className="image-gallery-empty"><span><Images size={28} /></span><h2>建立你的私人图片收藏</h2><p>选择一张或多张本地图片建立索引，原始文件不会被移动、复制或修改。</p><Button onClick={() => void addImages()}><Plus size={16} />添加第一批图片</Button></div> : visible.length === 0 ? <div className="image-gallery-empty compact"><span><Search size={25} /></span><h2>没有找到图片</h2><p>可以调整筛选条件，或者向当前收藏夹添加图片。</p><Button onClick={() => void addImages()}><Plus size={16} />添加图片</Button></div> : <><div className={`image-gallery-grid ${selectedIds.size ? 'selecting' : ''}`}>{pagedVisible.map((asset) => {
+        {library.assets.length === 0 ? <div className="image-gallery-empty"><span><Images size={28} /></span><h2>建立你的私人图片收藏</h2><p>选择一张或多张本地图片建立索引，原始文件不会被移动、复制或修改。</p><Button onClick={() => void addImages()}><Plus size={16} />添加第一批图片</Button></div> : visible.length === 0 ? <div className="image-gallery-empty compact"><span><Search size={25} /></span><h2>没有找到图片</h2><p>可以调整筛选条件，或者向当前收藏夹添加图片。</p><Button onClick={() => void addImages()}><Plus size={16} />添加图片</Button></div> : <><div ref={galleryGridRef} className={`image-gallery-grid ${selectedIds.size ? 'selecting' : ''}`}>{pagedVisible.map((asset) => {
           const isSelected = selectedIds.has(asset.id)
           const useOriginal = thumbnailFallbackPaths.has(asset.path)
           const imageUrl = useOriginal ? urls[asset.path] : thumbnailUrls[asset.path]
@@ -418,7 +516,9 @@ export function ImageGalleryPage() {
 
     <Dialog open={folderImportOpen} onOpenChange={setFolderImportOpen}><DialogContent className="image-folder-dialog"><DialogHeader><DialogTitle>批量导入图片文件夹</DialogTitle><DialogDescription>文件夹只作为导入来源；系统会创建同名收藏夹，你之后可以自由调整归类。</DialogDescription></DialogHeader><div className="image-recursive-options"><button className={recursive ? 'active' : ''} onClick={() => setRecursive(true)}><FolderOpen size={20} /><strong>包含子文件夹</strong><span>递归导入目录中的所有图片</span></button><button className={!recursive ? 'active' : ''} onClick={() => setRecursive(false)}><FolderInput size={20} /><strong>仅当前文件夹</strong><span>忽略所有下级目录</span></button></div><DialogFooter><Button variant="outline" onClick={() => setFolderImportOpen(false)}>取消</Button><Button disabled={busy} onClick={() => void importFolder()}>选择并导入</Button></DialogFooter></DialogContent></Dialog>
 
-    <Sheet open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null) }}><SheetContent className="detail-drawer metadata-drawer" showCloseButton><SheetHeader className="metadata-sheet-header"><SheetTitle>图片详情</SheetTitle><SheetDescription>查看索引信息并调整收藏夹归类。</SheetDescription></SheetHeader>{selected && <div className="metadata-sheet-body image-detail-body"><div className="image-detail-preview">{urls[selected.path] && !selected.missing ? <img src={urls[selected.path]} alt={selected.name} /> : <AlertCircle size={34} />}</div>{selected.missing && <div className="notice error"><AlertCircle size={16} />原文件已移动或删除，索引信息仍然保留。</div>}<div className="image-detail-section"><h3>所属收藏夹</h3><div className="image-collection-choices">{library.collections.length ? library.collections.map((collection) => <button key={collection.id} className={selected.collectionIds.includes(collection.id) ? 'active' : ''} onClick={() => toggleAssetCollection(collection.id)}><span className="private-collection-name">{collection.name}</span></button>) : <p>还没有收藏夹，可以先在图片库左侧新建。</p>}</div></div><dl className="image-detail-list"><div><dt>文件名</dt><dd className="private-image-value">{selected.name}</dd></div><div><dt>尺寸类型</dt><dd>{typeLabels[selected.aspectType]}</dd></div><div><dt>分辨率</dt><dd>{selected.width} × {selected.height}</dd></div><div><dt>格式</dt><dd>{selected.extension.replace('.', '').toUpperCase()}</dd></div><div><dt>文件大小</dt><dd>{formatBytes(selected.size)}</dd></div><div><dt>完整路径</dt><dd className="private-image-value" title={selected.path}>{shortPath(selected.path)}</dd></div></dl><Button variant="ghost" className="button image-index-remove" onClick={() => setRemoveAsset(selected)}><Trash2 size={16} />移除图片索引</Button></div>}<SheetFooter className="metadata-sheet-footer"><Button variant="outline" className="button secondary" onClick={() => setSelected(null)}>取消</Button>{selected?.missing ? <Button className="button primary" disabled={busy} onClick={() => void relocateAsset(selected)}><LocateFixed size={16} />重新定位</Button> : <Button className="button primary" onClick={() => setSelected(null)}>完成</Button>}</SheetFooter></SheetContent></Sheet>
+    <Sheet open={Boolean(selected)} onOpenChange={(open) => { if (!open) closeDetails() }}><SheetContent className="detail-drawer metadata-drawer" showCloseButton><SheetHeader className="metadata-sheet-header"><SheetTitle>图片详情</SheetTitle><SheetDescription>查看索引信息并调整收藏夹归类。</SheetDescription></SheetHeader>{selected && <div className="metadata-sheet-body image-detail-body"><button ref={setDetailPreviewElement} type="button" className="image-detail-preview" style={{ aspectRatio: `${Math.max(1, selected.width)} / ${Math.max(1, selected.height)}` }} disabled={selected.missing} aria-label={selected.missing ? `${selected.name} 的原文件不可用` : `放大查看 ${selected.name}`} onClick={openImageViewer}>{selected.missing ? <AlertCircle size={34} /> : detailPreviewSrc ? <><img src={detailPreviewSrc} alt={selected.name} /><span className="image-detail-zoom-hint"><Maximize2 size={14} />点击放大</span></> : <RefreshCw className="spin" size={25} aria-label="正在生成清晰预览" />}</button>{selected.missing && <div className="notice error"><AlertCircle size={16} />原文件已移动或删除，索引信息仍然保留。</div>}<div className="image-detail-section"><h3>所属收藏夹</h3><div className="image-collection-choices">{library.collections.length ? library.collections.map((collection) => <button key={collection.id} className={selected.collectionIds.includes(collection.id) ? 'active' : ''} onClick={() => toggleAssetCollection(collection.id)}><span className="private-collection-name">{collection.name}</span></button>) : <p>还没有收藏夹，可以先在图片库左侧新建。</p>}</div></div><dl className="image-detail-list"><div><dt>文件名</dt><dd className="private-image-value">{selected.name}</dd></div><div><dt>尺寸类型</dt><dd>{typeLabels[selected.aspectType]}</dd></div><div><dt>分辨率</dt><dd>{selected.width} × {selected.height}</dd></div><div><dt>格式</dt><dd>{selected.extension.replace('.', '').toUpperCase()}</dd></div><div><dt>文件大小</dt><dd>{formatBytes(selected.size)}</dd></div><div><dt>完整路径</dt><dd className="private-image-value" title={selected.path}>{shortPath(selected.path)}</dd></div></dl><Button variant="ghost" className="button image-index-remove" onClick={() => setRemoveAsset(selected)}><Trash2 size={16} />移除图片索引</Button></div>}<SheetFooter className="metadata-sheet-footer"><Button variant="outline" className="button secondary" onClick={closeDetails}>取消</Button>{selected?.missing ? <Button className="button primary" disabled={busy} onClick={() => void relocateAsset(selected)}><LocateFixed size={16} />重新定位</Button> : <Button className="button primary" onClick={closeDetails}>完成</Button>}</SheetFooter></SheetContent></Sheet>
+
+    <ImageViewer open={viewerOpen} onOpenChange={setViewerOpen} src={viewerPreviewSrc} originalSrc={selected ? urls[selected.path] : undefined} alt={selected?.name ?? '图片预览'} />
 
     <PromptDialog open={createCollectionOpen} onOpenChange={setCreateCollectionOpen} title="新建收藏夹" description="收藏夹只存在于丝月工坊中，不会更改本地文件夹。" placeholder="收藏夹名称" confirmLabel="创建" onSubmit={createCollection} />
     <PromptDialog open={Boolean(renameCollection)} onOpenChange={(open) => { if (!open) setRenameCollection(null) }} title="重命名收藏夹" description="本地图片和文件夹名称不会改变。" initialValue={renameCollection?.name} placeholder="收藏夹名称" confirmLabel="保存" onSubmit={rename} />

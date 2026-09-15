@@ -589,7 +589,7 @@ export interface SylunaeAPI {
     relocateAsset: (assetId: string, library: ImageLibraryState) => Promise<ImageLibraryState | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getUrls: (paths: string[]) => Promise<Record<string, string>>
-    getThumbnailUrls: (paths: string[]) => Promise<Record<string, string>>
+    getThumbnailUrls: (requests: Array<{ path: string; maxEdge: number }>) => Promise<Record<string, string>>
   }
   backup: {
     exportFile: (contents: string, defaultName?: string) => Promise<boolean>

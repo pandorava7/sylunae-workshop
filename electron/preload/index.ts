@@ -58,7 +58,7 @@ const api: SylunaeAPI = {
     relocateAsset: (assetId, library) => ipcRenderer.invoke('images:relocate-asset', assetId, library),
     checkPaths: (paths) => ipcRenderer.invoke('images:check-paths', paths),
     getUrls: (paths) => ipcRenderer.invoke('images:get-urls', paths),
-    getThumbnailUrls: (paths) => ipcRenderer.invoke('images:get-thumbnail-urls', paths),
+    getThumbnailUrls: (requests) => ipcRenderer.invoke('images:get-thumbnail-urls', requests),
   },
   backup: {
     exportFile: (contents, defaultName) => ipcRenderer.invoke('backup:export', contents, defaultName),

@@ -8,6 +8,7 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { create as createYoutubeDl } from 'youtube-dl-exec'
+import sharp from 'sharp'
 import { closeDatabase, loadSnapshot, replaceSnapshot, saveSnapshotPatch } from './database'
 import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
 import { downloadResource, getResourceAudioPath, importWhiteNoise, listResources, removeResource } from './resourceManager'
@@ -33,7 +34,7 @@ const sessionMediaPaths = new Set<string>()
 const sessionDownloadDirectories = new Set<string>()
 const sessionImageRootPaths = new Set<string>()
 const cancelledImageScans = new Set<string>()
-const IMAGE_THUMBNAIL_MAX_EDGE = 960
+const IMAGE_THUMBNAIL_MAX_EDGE = 2560
 const IMAGE_THUMBNAIL_CACHE_LIMIT = 256 * 1024 * 1024
 const imageThumbnailRequests = new Map<string, Promise<Buffer>>()
 let imageThumbnailPrune: Promise<void> | null = null
@@ -87,28 +88,25 @@ async function pruneImageThumbnailCache(): Promise<void> {
   return imageThumbnailPrune
 }
 
-async function getImageThumbnail(filePath: string): Promise<Buffer> {
+async function getImageThumbnail(filePath: string, maxEdge: number): Promise<Buffer> {
   const details = statSync(filePath)
-  const key = createHash('sha256').update(`${pathKey(filePath)}:${details.size}:${details.mtimeMs}:${IMAGE_THUMBNAIL_MAX_EDGE}`).digest('hex')
+  const edge = Math.max(64, Math.min(IMAGE_THUMBNAIL_MAX_EDGE, Math.round(maxEdge)))
+  const key = createHash('sha256').update(`thumbnail-v3:${pathKey(filePath)}:${details.size}:${details.mtimeMs}:${edge}`).digest('hex')
   const cachePath = join(imageThumbnailDirectory(), `${key}.png`)
   if (existsSync(cachePath)) return readFileSync(cachePath)
 
   const pending = imageThumbnailRequests.get(key)
   if (pending) return pending
-  const request = Promise.resolve().then(() => {
-    const source = nativeImage.createFromPath(filePath)
-    if (source.isEmpty()) throw new Error('无法读取图片')
-    const { width, height } = source.getSize()
-    const scale = Math.min(1, IMAGE_THUMBNAIL_MAX_EDGE / Math.max(width, height))
-    const thumbnail = scale < 1
-      ? source.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'best' })
-      : source
-    const buffer = thumbnail.toPNG()
-    mkdirSync(imageThumbnailDirectory(), { recursive: true })
-    writeFileSync(cachePath, buffer)
-    void pruneImageThumbnailCache()
-    return buffer
-  }).finally(() => imageThumbnailRequests.delete(key))
+  const request = sharp(filePath, { failOn: 'error' })
+    .resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true, kernel: 'lanczos3' })
+    .png()
+    .toBuffer()
+    .then((buffer) => {
+      mkdirSync(imageThumbnailDirectory(), { recursive: true })
+      writeFileSync(cachePath, buffer)
+      void pruneImageThumbnailCache()
+      return buffer
+    }).finally(() => imageThumbnailRequests.delete(key))
   imageThumbnailRequests.set(key, request)
   return request
 }
@@ -950,15 +948,16 @@ function registerIpc(): void {
       return [[filePath, `sylunae-media://image/${Buffer.from(filePath).toString('base64url')}`]]
     }))
   })
-  ipcMain.handle('images:get-thumbnail-urls', (_event, paths: string[]) => {
+  ipcMain.handle('images:get-thumbnail-urls', (_event, requests: Array<{ path: string; maxEdge: number }>) => {
     const snapshot = loadSnapshot()
     const indexedImagePaths = new Set((snapshot.imageLibrary?.assets ?? []).map((asset) => pathKey(asset.path)))
     for (const event of snapshot.countdowns) if (event.coverImagePath) indexedImagePaths.add(pathKey(event.coverImagePath))
-    return Object.fromEntries(paths.flatMap((filePath) => {
+    return Object.fromEntries(requests.flatMap(({ path: filePath, maxEdge }) => {
       const authorized = sessionMediaPaths.has(filePath) || indexedImagePaths.has(pathKey(filePath))
       if (!authorized || !existsSync(filePath) || !IMAGE_EXTENSIONS.has(extname(filePath).toLowerCase())) return []
       const details = statSync(filePath)
-      return [[filePath, `sylunae-media://thumbnail/${Buffer.from(filePath).toString('base64url')}?v=${details.size}-${details.mtimeMs}`]]
+      const edge = Math.max(64, Math.min(IMAGE_THUMBNAIL_MAX_EDGE, Math.round(maxEdge)))
+      return [[filePath, `sylunae-media://thumbnail/${Buffer.from(filePath).toString('base64url')}?v=thumbnail-v3-${details.size}-${details.mtimeMs}&edge=${edge}`]]
     }))
   })
 
@@ -1026,7 +1025,8 @@ app.whenReady().then(() => {
     }
     if (url.hostname === 'thumbnail') {
       try {
-        const thumbnail = await getImageThumbnail(filePath)
+        const requestedEdge = Number(url.searchParams.get('edge'))
+        const thumbnail = await getImageThumbnail(filePath, Number.isFinite(requestedEdge) ? requestedEdge : IMAGE_THUMBNAIL_MAX_EDGE)
         return new Response(new Uint8Array(thumbnail), { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin': rendererOrigin } })
       } catch { return new Response('Not found', { status: 404 }) }
     }
