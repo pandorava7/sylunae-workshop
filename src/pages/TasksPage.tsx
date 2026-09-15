@@ -333,6 +333,8 @@ function CountdownPanel() {
   const past = entries
     .filter(({ result }) => result.state === 'past')
     .sort((a, b) => Number(b.event.pinned) - Number(a.event.pinned) || b.result.occurrence.getTime() - a.result.occurrence.getTime())
+  const featured = [...upcoming].sort((a, b) => a.result.occurrence.getTime() - b.result.occurrence.getTime())[0]
+    ?? [...past].sort((a, b) => b.result.occurrence.getTime() - a.result.occurrence.getTime())[0]
   const selected = countdowns.find((event) => event.id === selectedId) ?? null
   const selectedResult = selected ? countdownResult(selected, now) : null
 
@@ -358,6 +360,7 @@ function CountdownPanel() {
 
   return <div className="task-panel countdown-panel">
     <div className="panel-heading"><div><h2>倒数日</h2><p>{countdowns.length ? `${countdowns.length} 个日子，未来与过去一目了然` : '记下一个名称和日期，就完成了'}</p></div><Button className="button primary" onClick={() => setEditing(null)}><Plus size={16} />添加倒数日</Button></div>
+    {featured && <CountdownFeatureHero event={featured.event} result={featured.result} coverUrl={coverUrlFor(featured.event)} onOpen={() => setSelectedId(featured.event.id)} />}
     {entries.length ? <div className="countdown-list">
       {upcoming.length > 0 && <CountdownSection title="即将到来" count={upcoming.length} entries={upcoming} onOpen={setSelectedId} onEdit={setEditing} onDelete={setDeleting} onPin={(event) => patch(event.id, { pinned: !event.pinned })} />}
       {past.length > 0 && <CountdownSection title="已经过去" count={past.length} entries={past} past onOpen={setSelectedId} onEdit={setEditing} onDelete={setDeleting} onPin={(event) => patch(event.id, { pinned: !event.pinned })} />}
@@ -366,6 +369,16 @@ function CountdownPanel() {
     <CountdownDetail event={selected} result={selectedResult} coverUrl={selected ? coverUrlFor(selected) : ''} onClose={() => setSelectedId(null)} onEdit={() => { if (selected) { setEditing(selected); setSelectedId(null) } }} onPin={() => { if (selected) patch(selected.id, { pinned: !selected.pinned }) }} onDelete={() => { if (selected) { setDeleting(selected); setSelectedId(null) } }} />
     <ConfirmDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null) }} title="删除这个倒数日？" description={<>“<span className="user-content">{deleting?.title}</span>”删除后无法恢复。</>} confirmLabel="删除" destructive icon={<Trash2 />} onConfirm={remove} />
   </div>
+  }
+
+function CountdownFeatureHero({ event, result, coverUrl, onOpen }: { event: CountdownEvent; result: CountdownResult; coverUrl: string; onOpen: () => void }) {
+  const meta = countdownCategoryMeta[event.category]
+  const Icon = meta.icon
+  const label = result.state === 'today' && result.displayDays === 0 ? '就是今天' : result.state === 'past' ? `已经过去 ${result.displayDays} 天` : `还有 ${result.displayDays} 天`
+  return <article className={`countdown-feature-hero accent-${event.accent} ${result.state}`} style={countdownCoverStyle(coverUrl)} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(keyEvent) => { if (keyEvent.key === 'Enter' || keyEvent.key === ' ') { keyEvent.preventDefault(); onOpen() } }} aria-label={`查看倒数日：${event.title}`}>
+    <div className="countdown-feature-copy"><span><Icon size={15} />最近的倒数日 · {meta.label}</span><h3 className="user-content">{event.title}</h3><p>{formatCountdownDate(event, result.occurrence)}</p></div>
+    <div className="countdown-feature-value"><span>{label}</span>{event.precise ? <PreciseCountdown result={result} compact /> : <strong>{result.displayDays}</strong>}<small>{event.precise ? '精确计时' : '天'}</small></div>
+  </article>
 }
 
 function CountdownSection({ title, count, entries, past = false, onOpen, onEdit, onDelete, onPin }: { title: string; count: number; entries: Array<{ event: CountdownEvent; result: CountdownResult }>; past?: boolean; onOpen: (id: string) => void; onEdit: (event: CountdownEvent) => void; onDelete: (event: CountdownEvent) => void; onPin: (event: CountdownEvent) => void }) {

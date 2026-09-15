@@ -741,6 +741,20 @@ input, textarea, select { color: var(--text); }
 .countdown-empty-hero > span { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 18px; background: var(--accent-soft); color: var(--brand); }
 .countdown-empty-hero h3 { margin: 16px 0 6px; font-size: 18px; }
 .countdown-empty-hero p { max-width: 440px; margin: 0 0 18px; color: var(--muted-text); font-size: 12px; line-height: 1.7; }
+.countdown-feature-hero { position: relative; min-height: 214px; margin-bottom: 24px; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 30px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--countdown-accent) 28%, var(--line)); border-radius: 18px; background: var(--countdown-cover) center / cover no-repeat; color: var(--text); cursor: pointer; isolation: isolate; transition: border-color .16s ease, transform .16s ease; }
+.countdown-feature-hero::before { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(100deg, color-mix(in srgb, var(--surface) 93%, transparent) 0%, color-mix(in srgb, var(--surface) 80%, transparent) 58%, color-mix(in srgb, var(--surface) 68%, transparent) 100%); }
+.countdown-feature-hero:hover { border-color: color-mix(in srgb, var(--countdown-accent) 52%, var(--line)); transform: translateY(-1px); }
+.countdown-feature-hero:focus-visible { outline: 2px solid var(--countdown-accent); outline-offset: 3px; }
+.countdown-feature-hero.past { --countdown-accent: var(--faint); }
+.countdown-feature-copy { min-width: 0; }
+.countdown-feature-copy > span { display: flex; align-items: center; gap: 6px; color: var(--countdown-accent); font-size: 12px; font-weight: 600; }
+.countdown-feature-copy h3 { max-width: 600px; margin: 9px 0 7px; overflow: hidden; font-size: clamp(25px, 3.4vw, 38px); line-height: 1.2; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
+.countdown-feature-copy p { margin: 0; color: var(--muted-text); font-size: 12px; }
+.countdown-feature-value { min-width: 136px; display: flex; flex-direction: column; align-items: flex-end; color: var(--countdown-accent); text-align: right; }
+.countdown-feature-value > span { margin-bottom: 9px; color: var(--muted-text); font-size: 12px; }
+.countdown-feature-value > strong { font-family: 'DM Sans', sans-serif; font-size: clamp(56px, 8vw, 84px); font-weight: 500; line-height: .82; letter-spacing: -.07em; font-variant-numeric: tabular-nums; }
+.countdown-feature-value > small { margin-top: 10px; color: var(--muted-text); font-size: 12px; }
+.countdown-feature-value .countdown-precise { justify-content: end; }
 .countdown-list { display: flex; flex-direction: column; gap: 22px; }
 .countdown-section > header { min-height: 34px; padding: 0 3px; display: flex; align-items: center; gap: 8px; }
 .countdown-section > header h3 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -2061,6 +2075,11 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
   .focus-guide { min-height: 0; }
   .timer-settings { grid-template-columns: 1fr 1fr; }
   .timer-settings .button { grid-column: 1 / -1; }
+  .countdown-feature-hero { min-height: 200px; padding: 24px 20px; align-items: flex-start; flex-direction: column; justify-content: space-between; gap: 18px; }
+  .countdown-feature-copy h3 { max-width: 100%; font-size: 28px; }
+  .countdown-feature-value { width: 100%; min-width: 0; align-items: flex-start; text-align: left; }
+  .countdown-feature-value > strong { font-size: 64px; }
+  .countdown-feature-value .countdown-precise { justify-content: start; }
   .countdown-row-actions { opacity: 1; }
   .countdown-form-row { grid-template-columns: 1fr; }
   .countdown-detail { padding: 18px; }
