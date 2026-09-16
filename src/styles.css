@@ -31,6 +31,8 @@
   --brand: #2f2f2f;
   --accent-soft: #f2f2f2;
   --accent-deep: #171717;
+  --selection-bg: color-mix(in srgb, var(--brand) 36%, var(--bg));
+  --selection-foreground: var(--text);
   --danger: #c94a4a;
   --danger-soft: #fbeeee;
   --success: #4f8060;
@@ -194,7 +196,7 @@ button, input, textarea, select { font: inherit; }
 button, select { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .48; }
 input, textarea, select { color: var(--text); }
-::selection { background: var(--accent-soft); }
+::selection { background: var(--selection-bg); color: var(--selection-foreground); }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-text) 34%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 20px; }
 
@@ -1524,6 +1526,15 @@ input[type='range'] { height: 3px; accent-color: var(--brand); }
 .tiptap-editor blockquote { padding-left: 14px; border-left: 3px solid var(--brand); color: var(--muted-text); }
 .tiptap-editor pre { padding: 14px 16px; overflow-x: auto; border-radius: 8px; background: #252321; color: #eeeae4; font-size: 13px; }
 .tiptap-editor a { color: var(--brand); text-decoration: underline; }
+.tiptap-editor .tableWrapper { max-width: 100%; margin: 1.25em 0; overflow-x: auto; }
+.tiptap-editor table { width: max-content; min-width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tiptap-editor :is(th, td) { min-width: 96px; padding: 9px 11px; border: 1px solid var(--line); vertical-align: top; }
+.tiptap-editor th { background: var(--surface-2); color: var(--text); font-weight: 650; text-align: left; }
+.tiptap-editor td { background: var(--surface); }
+.tiptap-editor :is(th, td).selectedCell::after { position: absolute; z-index: 2; inset: 0; background: color-mix(in srgb, var(--brand) 16%, transparent); content: ''; pointer-events: none; }
+.tiptap-editor :is(th, td).selectedCell { position: relative; }
+.tiptap-editor .column-resize-handle { position: absolute; z-index: 20; top: 0; right: -2px; bottom: -2px; width: 4px; background: var(--brand); pointer-events: none; }
+.tiptap-editor.resize-cursor { cursor: col-resize; }
 .tiptap-editor figure[data-type='note-image'] { width: fit-content; max-width: 100%; margin: 22px auto; border: 2px solid transparent; border-radius: 12px; transition: border-color .16s ease, box-shadow .16s ease; }
 .tiptap-editor figure[data-type='note-image'].ProseMirror-selectednode, .tiptap-editor figure[data-type='note-image'].image-cursor-adjacent { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent); }
 .tiptap-editor figure[data-type='note-image'] img { display: block; max-width: 100%; border-radius: 9px; }

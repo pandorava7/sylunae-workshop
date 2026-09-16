@@ -6,7 +6,8 @@ import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
-import { ArchiveRestore, Bold, CheckSquare, Code2, Folder, FolderPlus, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, NotebookPen, Pin, PinOff, Plus, Quote, Search, Strikethrough, Trash2, Undo2 } from 'lucide-react'
+import { TableKit } from '@tiptap/extension-table'
+import { ArchiveRestore, Bold, CheckSquare, Code2, Columns3, Folder, FolderPlus, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, NotebookPen, Pin, PinOff, Plus, Quote, Rows3, Search, Strikethrough, Table2, Trash2, Undo2 } from 'lucide-react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { useAppStore } from '../app/AppStore'
 import type { Note } from '../shared/types'
@@ -145,7 +146,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     titleTimer.current = setTimeout(commitTitle, 500)
   }
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), Markdown, MarkdownPaste],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), TableKit.configure({ table: { resizable: true } }), Markdown, MarkdownPaste],
     content: note.content,
     editable: !inTrash,
     editorProps: {
@@ -245,6 +246,12 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       <i />
       {action(editor.isActive('link'), '链接', <Link2 size={16} />, () => setPromptKind('link'))}
       {action(false, '图片', <ImagePlus size={16} />, () => setImageSourceOpen(true))}
+      {action(editor.isActive('table'), '插入表格', <Table2 size={16} />, () => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() })}
+      {editor.isActive('table') && <>
+        {action(false, '在下方添加行', <Rows3 size={16} />, () => { editor.chain().focus().addRowAfter().run() })}
+        {action(false, '在右侧添加列', <Columns3 size={16} />, () => { editor.chain().focus().addColumnAfter().run() })}
+        {action(false, '删除当前表格', <Trash2 size={16} />, () => { editor.chain().focus().deleteTable().run() })}
+      </>}
       {action(false, '撤销', <Undo2 size={16} />, () => { editor.chain().focus().undo().run() })}
     </div>}
     <EditorContent className="note-editor-content" editor={editor} />

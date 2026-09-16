@@ -15,6 +15,39 @@ function waveformColors() {
   }
 }
 
+function renderEnergyWaveform(peaks: Array<Float32Array | number[]>, ctx: CanvasRenderingContext2D) {
+  const primaryChannel = peaks[0]
+  if (!primaryChannel?.length) return
+
+  const secondaryChannel = peaks[1] ?? primaryChannel
+  const { width, height } = ctx.canvas
+  const halfHeight = height / 2
+  const samplesPerColumn = primaryChannel.length / width
+  const amplitudes = new Float32Array(width)
+
+  for (let x = 0; x < width; x++) {
+    const start = Math.floor(x * samplesPerColumn)
+    const end = Math.min(primaryChannel.length, Math.ceil((x + 1) * samplesPerColumn))
+    let energy = 0
+
+    for (let index = start; index < end; index++) {
+      const primary = primaryChannel[index] ?? 0
+      const secondary = secondaryChannel[index] ?? primary
+      energy += (primary * primary + secondary * secondary) / 2
+    }
+
+    const rms = Math.sqrt(energy / Math.max(1, end - start))
+    amplitudes[x] = rms / (rms + 0.32)
+  }
+
+  ctx.beginPath()
+  ctx.moveTo(0, halfHeight)
+  for (let x = 0; x < width; x++) ctx.lineTo(x, halfHeight - amplitudes[x] * halfHeight)
+  for (let x = width - 1; x >= 0; x--) ctx.lineTo(x, halfHeight + amplitudes[x] * halfHeight)
+  ctx.closePath()
+  ctx.fill()
+}
+
 export function AudioWaveform({ media, src }: AudioWaveformProps) {
   const container = useRef<HTMLDivElement>(null)
   const wavesurfer = useRef<WaveSurfer | null>(null)
@@ -39,7 +72,7 @@ export function AudioWaveform({ media, src }: AudioWaveformProps) {
       dragToSeek: true,
       fillParent: true,
       hideScrollbar: true,
-      normalize: true,
+      renderFunction: renderEnergyWaveform,
       ...waveformColors(),
     })
     wavesurfer.current = instance

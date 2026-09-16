@@ -32,6 +32,7 @@
     "@tiptap/extension-image": "latest",
     "@tiptap/extension-link": "latest",
     "@tiptap/extension-placeholder": "latest",
+    "@tiptap/extension-table": "^3.31.3",
     "@tiptap/extension-task-item": "latest",
     "@tiptap/extension-task-list": "latest",
     "@tiptap/markdown": "^3.31.3",

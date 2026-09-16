@@ -5,6 +5,7 @@ import { Image } from '@tiptap/extension-image'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { TaskList } from '@tiptap/extension-task-list'
+import { TableKit } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -92,6 +93,28 @@ describe('note editor markdown paste', () => {
     expect(looksLikeMarkdown('*斜体*')).toBe(true)
     expect(looksLikeMarkdown('**粗体**')).toBe(true)
     expect(looksLikeMarkdown('普通文本')).toBe(false)
+  })
+
+  it('converts Markdown tables into editable table nodes', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit, TableKit, Markdown, MarkdownPaste],
+      content: '',
+    })
+
+    const event = pasteEvent('| 名称 | 状态 |\n| --- | --- |\n| 读书 | 进行中 |')
+    editor.view.dom.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(editor.getJSON().content?.[0]).toMatchObject({
+      type: 'table',
+      content: [
+        { type: 'tableRow', content: [{ type: 'tableHeader' }, { type: 'tableHeader' }] },
+        { type: 'tableRow', content: [{ type: 'tableCell' }, { type: 'tableCell' }] },
+      ],
+    })
+
+    editor.destroy()
   })
 
   it('continues a list item for every pasted plain-text line', () => {
