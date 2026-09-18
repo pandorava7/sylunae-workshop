@@ -1,11 +1,39 @@
 import { Extension, type Editor } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
+import { bookmarkAttributes, isStandaloneHttpUrl } from './linkBookmark'
 
 export function looksLikeMarkdown(value: string) {
   const blockSyntax = /(^|\n)\s{0,3}(#{1,6}\s+|```|~~~|>\s+|[-*+]\s+|\d+[.)]\s+|- \[[ xX]\]\s+|(?:[-*_]\s*){3,}$)/m
   const setextHeadingOrTable = /(^|\n).+\n\s*(?:={3,}|-{3,})\s*$|(^|\n)\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}/m
   const inlineSyntax = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|(^|\W)\*[^*\n]+\*(?=\W|$)|(^|\W)_[^_\n]+_(?=\W|$)|!?\[[^\]]+\]\([^\s)]+\))/m
   return blockSyntax.test(value) || setextHeadingOrTable.test(value) || inlineSyntax.test(value)
+}
+
+/** Keeps a pasted numbered-list run sequential even when the source repeats markers. */
+export function normalizeOrderedListMarkers(value: string) {
+  let nextNumber: number | null = null
+  let indentation: string | null = null
+  const lineEnding = value.includes('\r\n') ? '\r\n' : '\n'
+
+  return value.split(/\r?\n/).map((line) => {
+    const marker = line.match(/^(\s*)(\d+)([.)])(\s+)/)
+    if (!marker) {
+      nextNumber = null
+      indentation = null
+      return line
+    }
+
+    const [, leading, value, delimiter, spacing] = marker
+    const originalNumber = Number(value)
+    if (indentation !== leading || nextNumber === null) {
+      indentation = leading
+      nextNumber = originalNumber
+    }
+
+    const number = nextNumber
+    nextNumber += 1
+    return `${leading}${number}${delimiter}${spacing}${line.slice(marker[0].length)}`
+  }).join(lineEnding)
 }
 
 function currentListItemType(editor: Editor) {
@@ -38,14 +66,22 @@ function handleListContinuationPaste(editor: Editor | null, event: ClipboardEven
   return chain.run()
 }
 
-export function handleMarkdownPaste(editor: Editor | null, event: ClipboardEvent) {
+export function handleMarkdownPaste(editor: Editor | null, event: ClipboardEvent, pasteAsPlainText = false) {
+  if (pasteAsPlainText) return false
+
+  const plainText = event.clipboardData?.getData('text/plain')?.trim()
+  if (editor && plainText && isStandaloneHttpUrl(plainText)) {
+    event.preventDefault()
+    return editor.chain().focus().insertContent({ type: 'linkBookmark', attrs: bookmarkAttributes(plainText) }).run()
+  }
+
   if (handleListContinuationPaste(editor, event)) return true
 
   const markdown = event.clipboardData?.getData('text/plain')
   if (!editor || !markdown || !looksLikeMarkdown(markdown)) return false
 
   event.preventDefault()
-  return editor.chain().focus().insertContent(markdown, { contentType: 'markdown' }).run()
+  return editor.chain().focus().insertContent(normalizeOrderedListMarkers(markdown), { contentType: 'markdown' }).run()
 }
 
 export const MarkdownPaste = Extension.create({
@@ -53,9 +89,21 @@ export const MarkdownPaste = Extension.create({
   priority: 1000,
   addProseMirrorPlugins() {
     const editor = this.editor
+    let pasteAsPlainText = false
     return [new Plugin({
       props: {
-        handlePaste: (_view, event) => handleMarkdownPaste(editor, event),
+        handleKeyDown: (_view, event) => {
+          if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') {
+            pasteAsPlainText = true
+            window.setTimeout(() => { pasteAsPlainText = false }, 100)
+          }
+          return false
+        },
+        handlePaste: (_view, event) => {
+          const shouldPasteAsPlainText = pasteAsPlainText
+          pasteAsPlainText = false
+          return handleMarkdownPaste(editor, event, shouldPasteAsPlainText)
+        },
       },
     })]
   },

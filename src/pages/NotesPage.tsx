@@ -7,24 +7,30 @@ import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { TableKit } from '@tiptap/extension-table'
-import { ArchiveRestore, Bold, CheckSquare, Code2, Columns3, Folder, FolderPlus, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, NotebookPen, Pin, PinOff, Plus, Quote, Rows3, Search, Strikethrough, Table2, Trash2, Undo2 } from 'lucide-react'
+import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
+import { ArchiveRestore, Bold, CheckSquare, ChevronsUpDown, Code2, Columns3, Download, Folder, FolderPlus, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, Minus, NotebookPen, Pin, PinOff, Plus, Quote, Rows3, Search, Strikethrough, Table2, Trash2, Undo2, Upload } from 'lucide-react'
 import { NodeSelection } from '@tiptap/pm/state'
 import { useAppStore } from '../app/AppStore'
 import type { Note } from '../shared/types'
 import { extractText, formatDate, newId, nowIso } from '../utils'
 import { EmptyState } from '../components/Icons'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { NoteTagsInput } from '../components/NoteTagsInput'
 import { PromptDialog } from '../components/PromptDialog'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { MarkdownPaste } from '../editor/markdownPaste'
 import { applyNotePatch } from '../editor/notePatch'
+import { applyNoteLink } from '../editor/noteLink'
+import { LinkBookmark } from '../editor/linkBookmark'
 import { isImageNodeSelection, NoteImage, readImageFile } from '../editor/noteImage'
+import { markdownExport, markdownFileName, splitMarkdownNote } from '../editor/noteMarkdown'
+import { usePersistentState } from '../lib/usePersistentState'
 
 type FolderFilter = 'all' | 'trash' | string
+const NoteDetailsSummary = DetailsSummary.extend({ content: 'inline*' })
 
 export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) {
   const { snapshot, update } = useAppStore()
@@ -32,8 +38,9 @@ export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) 
   const folders = snapshot?.folders || []
   const [folderFilter, setFolderFilter] = useState<FolderFilter>('all')
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = usePersistentState<string | null>('navigation.notesSelectedId', null)
   const [creatingFolder, setCreatingFolder] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
   const createdOnOpen = useRef(false)
   const selected = notes.find((note) => note.id === selectedId) || null
@@ -43,7 +50,7 @@ export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) 
     return notes.filter((note) => {
       const trashMatch = folderFilter === 'trash' ? Boolean(note.deletedAt) : !note.deletedAt
       const folderMatch = folderFilter === 'all' || folderFilter === 'trash' || note.folderId === folderFilter
-      const textMatch = !clean || `${note.title} ${note.tags.join(' ')} ${extractText(note.content)}`.toLowerCase().includes(clean)
+      const textMatch = !clean || `${note.title} ${extractText(note.content)}`.toLowerCase().includes(clean)
       return trashMatch && folderMatch && textMatch
     }).sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
   }, [notes, folderFilter, query])
@@ -86,13 +93,13 @@ export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) 
   }
 
   return <section className="page notes-page">
-    <header className="page-header compact"><div><span className="eyebrow">NOTES</span><h1>笔记</h1></div><Button className="button primary" onClick={addNote}><Plus size={17} />新建笔记</Button></header>
+    <header className="page-header compact"><div><span className="eyebrow">NOTES</span><h1>笔记</h1></div><div className="notes-page-actions"><Button variant="outline" className="button notes-browser-trigger" onClick={() => setBrowserOpen(true)}><NotebookPen size={17} />笔记列表</Button><Button className="button primary" onClick={addNote}><Plus size={17} />新建笔记</Button></div></header>
     <div className="notes-workspace">
       <aside className="folder-pane">
-        <button className={folderFilter === 'all' ? 'active' : ''} onClick={() => setFolderFilter('all')}><NotebookPen size={17} />全部笔记<span>{notes.filter((note) => !note.deletedAt).length}</span></button>
+        <button className={folderFilter === 'all' ? 'active' : ''} onClick={() => setFolderFilter('all')} title="全部笔记"><NotebookPen size={17} />全部笔记<span>{notes.filter((note) => !note.deletedAt).length}</span></button>
         <div className="pane-label"><span>文件夹</span><button onClick={() => setCreatingFolder(true)} title="新建文件夹"><FolderPlus size={15} /></button></div>
-        {folders.map((folder) => <button key={folder.id} className={folderFilter === folder.id ? 'active' : ''} onClick={() => setFolderFilter(folder.id)}><Folder size={16} /><span className="user-content">{folder.name}</span><span>{notes.filter((note) => note.folderId === folder.id && !note.deletedAt).length}</span></button>)}
-        <button className={`trash-link ${folderFilter === 'trash' ? 'active' : ''}`} onClick={() => setFolderFilter('trash')}><Trash2 size={16} />回收站<span>{notes.filter((note) => note.deletedAt).length}</span></button>
+        {folders.map((folder) => <button key={folder.id} className={folderFilter === folder.id ? 'active' : ''} onClick={() => setFolderFilter(folder.id)} title={folder.name}><Folder size={16} /><span className="user-content">{folder.name}</span><span>{notes.filter((note) => note.folderId === folder.id && !note.deletedAt).length}</span></button>)}
+        <button className={`trash-link ${folderFilter === 'trash' ? 'active' : ''}`} onClick={() => setFolderFilter('trash')} title="回收站"><Trash2 size={16} />回收站<span>{notes.filter((note) => note.deletedAt).length}</span></button>
       </aside>
       <div className="note-list-pane">
         <label className="search-box small"><Search size={15} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索笔记" /></label>
@@ -102,6 +109,7 @@ export function NotesPage({ createOnOpen = false }: { createOnOpen?: boolean }) 
       </div>
       <div className="editor-pane">{selected ? <NoteEditor key={selected.id} note={selected} folders={folders} inTrash={Boolean(selected.deletedAt)} onSave={(patch) => saveNote(selected.id, patch)} onTrash={() => moveToTrash(selected)} onRestore={() => restore(selected)} onDestroy={() => setDeleteTarget(selected)} /> : <EmptyState icon={<NotebookPen size={25} />} title={folderFilter === 'trash' ? '回收站是空的' : '开始写一点什么'} description={folderFilter === 'trash' ? '删除的笔记会在这里等待你决定。' : '新建一条笔记，记下此刻的想法。'} action={folderFilter !== 'trash' ? <Button className="button primary" onClick={addNote}>新建笔记</Button> : undefined} />}</div>
     </div>
+    <Sheet open={browserOpen} onOpenChange={setBrowserOpen}><SheetContent side="left" className="notes-browser-sheet"><SheetHeader><SheetTitle>笔记</SheetTitle><SheetDescription>选择文件夹或继续编辑一篇笔记。</SheetDescription></SheetHeader><div className="notes-browser-body"><div className="notes-browser-folders"><button className={folderFilter === 'all' ? 'active' : ''} onClick={() => setFolderFilter('all')}><NotebookPen size={17} />全部笔记<span>{notes.filter((note) => !note.deletedAt).length}</span></button><div className="notes-browser-folder-heading"><span>文件夹</span><button onClick={() => { setBrowserOpen(false); setCreatingFolder(true) }} title="新建文件夹"><FolderPlus size={15} /></button></div>{folders.map((folder) => <button key={folder.id} className={folderFilter === folder.id ? 'active' : ''} onClick={() => setFolderFilter(folder.id)}><Folder size={16} /><span className="user-content">{folder.name}</span><span>{notes.filter((note) => note.folderId === folder.id && !note.deletedAt).length}</span></button>)}<button className={`notes-browser-trash ${folderFilter === 'trash' ? 'active' : ''}`} onClick={() => setFolderFilter('trash')}><Trash2 size={16} />回收站<span>{notes.filter((note) => note.deletedAt).length}</span></button></div><div className="notes-browser-list"><label className="search-box small"><Search size={15} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索笔记" /></label><div>{visibleNotes.map((note) => <button key={note.id} className={selectedId === note.id ? 'active' : ''} onClick={() => { setSelectedId(note.id); setBrowserOpen(false) }}><strong className={note.title ? 'private-note-title' : undefined}>{note.title || '无标题笔记'}</strong><p className={extractText(note.content).trim() ? 'private-note-preview' : undefined}>{extractText(note.content).trim() || '空白笔记'}</p><span>{formatDate(note.updatedAt, true)}</span></button>)}</div></div></div></SheetContent></Sheet>
     <PromptDialog open={creatingFolder} onOpenChange={setCreatingFolder} title="新建文件夹" description="为笔记创建一个新分类。" placeholder="文件夹名称" confirmLabel="创建" onSubmit={addFolder} />
     <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }} title="永久删除笔记？" description={deleteTarget ? <><span>《</span><span className="user-content">{deleteTarget.title}</span><span>》将被永久删除，此操作无法撤销。</span></> : ''} confirmLabel="永久删除" destructive icon={<Trash2 />} onConfirm={() => { if (deleteTarget) destroy(deleteTarget); setDeleteTarget(null) }} />
   </section>
@@ -111,8 +119,10 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
   const [promptKind, setPromptKind] = useState<'link' | 'image-link' | null>(null)
   const [imageSourceOpen, setImageSourceOpen] = useState(false)
   const [captionPosition, setCaptionPosition] = useState<number | null>(null)
+  const [pendingImport, setPendingImport] = useState<string | null>(null)
   const [titleDraft, setTitleDraft] = useState(note.title)
   const imageInput = useRef<HTMLInputElement>(null)
+  const markdownInput = useRef<HTMLInputElement>(null)
   const saveRef = useRef(onSave)
   const contentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -146,7 +156,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     titleTimer.current = setTimeout(commitTitle, 500)
   }
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), TableKit.configure({ table: { resizable: true } }), Markdown, MarkdownPaste],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), TableKit.configure({ table: { resizable: true } }), Details.configure({ persist: true, HTMLAttributes: { class: 'note-details' }, renderToggleButton: ({ element, isOpen, node }) => { const label = node.textContent || '折叠内容'; element.setAttribute('aria-label', isOpen ? `收起：${label}` : `展开：${label}`); element.setAttribute('title', isOpen ? '收起内容' : '展开内容') } }), NoteDetailsSummary, DetailsContent, LinkBookmark, Markdown, MarkdownPaste],
     content: note.content,
     editable: !inTrash,
     editorProps: {
@@ -198,9 +208,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
   }, [])
 
   if (!editor) return null
-  const setLink = (url: string) => {
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-  }
+  const setLink = (url: string) => applyNoteLink(editor, url)
   const addImage = (url: string) => editor.chain().focus().setImage({ src: url }).run()
   const addImageFile = async (file: File) => addImage(await readImageFile(file))
   const caption = captionPosition === null ? '' : editor.state.doc.nodeAt(captionPosition)?.attrs.caption || ''
@@ -223,15 +231,50 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     }).run()
     setCaptionPosition(null)
   }
+  const exportMarkdown = () => {
+    commitTitle()
+    commitContent()
+    const file = new Blob([markdownExport(titleDraft, editor.getMarkdown())], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(file)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = markdownFileName(titleDraft)
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+  const importMarkdown = () => {
+    if (pendingImport === null) return
+    const imported = splitMarkdownNote(pendingImport)
+    editor.commands.setContent(imported.content, { contentType: 'markdown', emitUpdate: false })
+    const patch: Partial<Note> = { content: editor.getJSON() }
+    if (imported.title) {
+      setTitleDraft(imported.title)
+      patch.title = imported.title
+    }
+    onSave(patch)
+    setPendingImport(null)
+  }
   const action = (active: boolean, title: string, icon: React.ReactNode, run: () => void) => <button className={active ? 'active' : ''} title={title} onClick={run}>{icon}</button>
+  const insertDetails = () => editor.chain().focus().setDetails().command(({ tr }) => {
+    let detailsPosition: number | null = null
+    for (let depth = tr.selection.$from.depth; depth > 0; depth -= 1) {
+      if (tr.selection.$from.node(depth).type.name === 'details') {
+        detailsPosition = tr.selection.$from.before(depth)
+        break
+      }
+    }
+    if (detailsPosition === null) return false
+    const details = tr.doc.nodeAt(detailsPosition)
+    if (!details) return false
+    tr.setNodeMarkup(detailsPosition, undefined, { ...details.attrs, open: true })
+    return true
+  }).run()
 
   return <div className="note-editor-wrap">
-    <div className="note-editor-top"><Select value={note.folderId || 'none'} disabled={inTrash} onValueChange={(value) => onSave({ folderId: value === 'none' ? null : value })}><SelectTrigger className="select-control"><SelectValue className={note.folderId ? 'user-content' : undefined} /></SelectTrigger><SelectContent><SelectItem value="none">无文件夹</SelectItem>{folders.map((folder) => <SelectItem key={folder.id} value={folder.id}><span className="user-content">{folder.name}</span></SelectItem>)}</SelectContent></Select><div>
-      {!inTrash && <button className="icon-button" onClick={() => onSave({ pinned: !note.pinned })} title={note.pinned ? '取消置顶' : '置顶'}>{note.pinned ? <PinOff size={17} /> : <Pin size={17} />}</button>}
+    <div className="note-editor-top"><Select value={note.folderId || 'none'} disabled={inTrash} onValueChange={(value) => onSave({ folderId: value === 'none' ? null : value })}><SelectTrigger className="select-control"><SelectValue className={note.folderId ? 'user-content' : undefined} /></SelectTrigger><SelectContent><SelectItem value="none">无文件夹</SelectItem>{folders.map((folder) => <SelectItem key={folder.id} value={folder.id}><span className="user-content">{folder.name}</span></SelectItem>)}</SelectContent></Select><Input className="note-title-input" value={titleDraft} disabled={inTrash} onChange={(event) => scheduleTitle(event.target.value)} onBlur={commitTitle} placeholder="无标题笔记" /><div>
+      {!inTrash && <><button className="icon-button" onClick={exportMarkdown} title="导出 Markdown"><Download size={17} /></button><button className="icon-button" onClick={() => markdownInput.current?.click()} title="导入 Markdown"><Upload size={17} /></button><button className="icon-button" onClick={() => onSave({ pinned: !note.pinned })} title={note.pinned ? '取消置顶' : '置顶'}>{note.pinned ? <PinOff size={17} /> : <Pin size={17} />}</button></>}
       {inTrash ? <><button className="icon-button" onClick={onRestore} title="恢复"><ArchiveRestore size={17} /></button><button className="icon-button danger" onClick={onDestroy} title="永久删除"><Trash2 size={17} /></button></> : <button className="icon-button" onClick={onTrash} title="移至回收站"><Trash2 size={17} /></button>}
     </div></div>
-    <Input className="note-title-input" value={titleDraft} disabled={inTrash} onChange={(event) => scheduleTitle(event.target.value)} onBlur={commitTitle} placeholder="无标题笔记" />
-    <NoteTagsInput tags={note.tags} disabled={inTrash} onChange={(tags) => onSave({ tags })} />
     {!inTrash && <div className="editor-toolbar">
       {action(editor.isActive('bold'), '粗体', <Bold size={16} />, () => { editor.chain().focus().toggleBold().run() })}
       {action(editor.isActive('italic'), '斜体', <Italic size={16} />, () => { editor.chain().focus().toggleItalic().run() })}
@@ -247,18 +290,23 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
       {action(editor.isActive('link'), '链接', <Link2 size={16} />, () => setPromptKind('link'))}
       {action(false, '图片', <ImagePlus size={16} />, () => setImageSourceOpen(true))}
       {action(editor.isActive('table'), '插入表格', <Table2 size={16} />, () => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() })}
+      {action(editor.isActive('details'), '插入折叠区块', <ChevronsUpDown size={16} />, insertDetails)}
       {editor.isActive('table') && <>
         {action(false, '在下方添加行', <Rows3 size={16} />, () => { editor.chain().focus().addRowAfter().run() })}
         {action(false, '在右侧添加列', <Columns3 size={16} />, () => { editor.chain().focus().addColumnAfter().run() })}
+        {action(false, '删除当前行', <Minus size={16} />, () => { editor.chain().focus().deleteRow().run() })}
+        {action(false, '删除当前列', <Minus size={16} />, () => { editor.chain().focus().deleteColumn().run() })}
         {action(false, '删除当前表格', <Trash2 size={16} />, () => { editor.chain().focus().deleteTable().run() })}
       </>}
       {action(false, '撤销', <Undo2 size={16} />, () => { editor.chain().focus().undo().run() })}
     </div>}
     <EditorContent className="note-editor-content" editor={editor} />
     <div className="editor-status">{inTrash ? `删除于 ${formatDate(note.deletedAt || '', true)}` : `自动保存 · ${formatDate(note.updatedAt, true)}`}</div>
-    <PromptDialog open={promptKind === 'link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="添加链接" description="为当前选中文字设置链接。" initialValue={editor.getAttributes('link').href || 'https://'} placeholder="https://example.com" confirmLabel="应用链接" validate={(value) => /^https?:\/\//i.test(value) ? null : '请输入 http 或 https 链接'} onSubmit={setLink} />
+    <input ref={markdownInput} hidden type="file" accept="text/markdown,.md,.markdown,text/plain,.txt" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(setPendingImport); event.currentTarget.value = '' }} />
+    <PromptDialog open={promptKind === 'link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="添加链接" description="为选中文字设置链接；未选中文字时，会在光标处插入链接。" initialValue={editor.getAttributes('link').href || 'https://'} placeholder="https://example.com" confirmLabel="应用链接" validate={(value) => /^https?:\/\//i.test(value) ? null : '请输入 http 或 https 链接'} onSubmit={setLink} />
     <Dialog open={imageSourceOpen} onOpenChange={setImageSourceOpen}><DialogContent className="image-source-dialog"><DialogHeader><DialogTitle>插入图片</DialogTitle><DialogDescription>通过网络链接或从本地文件夹选择图片。</DialogDescription></DialogHeader><div className="image-source-actions"><Button variant="outline" className="button secondary" onClick={() => { setImageSourceOpen(false); setPromptKind('image-link') }}><Link2 size={17} />使用图片链接</Button><Button className="button primary" onClick={() => imageInput.current?.click()}><Folder size={17} />从文件夹选择</Button></div><input ref={imageInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImageSourceOpen(false); void addImageFile(file) } event.currentTarget.value = '' }} /></DialogContent></Dialog>
     <PromptDialog open={promptKind === 'image-link'} onOpenChange={(open) => { if (!open) setPromptKind(null) }} title="通过链接插入图片" description="请输入可直接访问的 HTTPS 图片地址。" placeholder="https://example.com/image.png" confirmLabel="插入图片" validate={(value) => /^https:\/\//i.test(value) ? null : '请输入 HTTPS 图片地址'} onSubmit={addImage} />
     <PromptDialog open={captionPosition !== null} onOpenChange={(open) => { if (!open) setCaptionPosition(null) }} title="图片说明" description="为图片添加 caption；留空保存可移除已有说明。" initialValue={caption} placeholder="输入图片说明" confirmLabel="保存说明" destructiveLabel="删除图片" allowEmpty onSubmit={saveCaption} onDestructive={deleteCaptionedImage} />
+    <ConfirmDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open) setPendingImport(null) }} title="导入 Markdown？" description="将用导入文件替换当前笔记的正文；若文件以一级标题开头，笔记标题也会同步更新。" confirmLabel="导入并替换" icon={<Upload size={20} />} onConfirm={importMarkdown} />
   </div>
 }

@@ -101,7 +101,7 @@ export function Sidebar({ active, taskView, collectionView, musicSection, musicV
           }}
           tabIndex={primaryNowPlaying ? 0 : -1}
           title={primaryNowPlaying ? `正在播放：${primaryNowPlaying.title}` : undefined}
-          style={{ '--now-playing-cover': nowPlaying?.cover ? `url(${nowPlaying.cover})` : ambientCover ? `url(${ambientCover})` : 'none' } as CSSProperties}
+          style={{ '--now-playing-cover': nowPlaying?.cover ? `url(${JSON.stringify(nowPlaying.cover)})` : ambientCover ? `url(${JSON.stringify(ambientCover)})` : 'none' } as CSSProperties}
         >
           {playingMusic ? <span className="music-wave" aria-hidden><i /><i /><i /><i /></span> : <CloudRain className="ambient-now-playing-icon" size={22} strokeWidth={1.65} aria-hidden />}
           <span className="now-playing-copy"><strong className={playingMusic ? 'private-music-title' : privateAmbient ? 'user-content' : undefined}>{primaryNowPlaying?.title || '正在播放'}</strong><small className={playingMusic && nowPlaying?.artist ? 'private-music-artist' : undefined}>{playingMusic ? nowPlaying?.artist || '未知艺术家' : '环境白噪音'}</small></span>

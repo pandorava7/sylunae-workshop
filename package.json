@@ -29,6 +29,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
+    "@tiptap/extension-details": "^3.31.3",
     "@tiptap/extension-image": "latest",
     "@tiptap/extension-link": "latest",
     "@tiptap/extension-placeholder": "latest",

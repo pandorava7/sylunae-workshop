@@ -6,15 +6,18 @@ import { Link } from '@tiptap/extension-link'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { TaskList } from '@tiptap/extension-task-list'
 import { TableKit } from '@tiptap/extension-table'
+import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { createElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
-import { NoteTagsInput } from '../components/NoteTagsInput'
-import { looksLikeMarkdown, MarkdownPaste } from '../editor/markdownPaste'
+import { describe, expect, it } from 'vitest'
+import { handleMarkdownPaste, looksLikeMarkdown, MarkdownPaste, normalizeOrderedListMarkers } from '../editor/markdownPaste'
+import { LinkBookmark } from '../editor/linkBookmark'
 import { applyNotePatch } from '../editor/notePatch'
+import { applyNoteLink } from '../editor/noteLink'
+import { markdownExport, markdownFileName, splitMarkdownNote } from '../editor/noteMarkdown'
 import type { Note } from '../shared/types'
+
+const DetailsSummaryWithBreaks = DetailsSummary.extend({ content: 'inline*' })
 
 function pasteEvent(text: string) {
   const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent
@@ -24,35 +27,69 @@ function pasteEvent(text: string) {
   return event
 }
 
-describe('note tag input', () => {
-  it('keeps an unfinished separator visible while saving parsed tags', () => {
-    const onChange = vi.fn()
-    render(createElement(NoteTagsInput, { tags: ['动画'], disabled: false, onChange }))
-    const input = screen.getByPlaceholderText('添加标签，用逗号分隔')
-
-    fireEvent.focus(input)
-    fireEvent.change(input, { target: { value: '动画,' } })
-
-    expect((input as HTMLInputElement).value).toBe('动画,')
-    expect(onChange).toHaveBeenLastCalledWith(['动画'])
-    cleanup()
-  })
-
-  it('normalizes ASCII and Chinese commas only after editing finishes', () => {
-    render(createElement(NoteTagsInput, { tags: [], disabled: false, onChange: () => undefined }))
-    const input = screen.getByPlaceholderText('添加标签，用逗号分隔')
-
-    fireEvent.focus(input)
-    fireEvent.change(input, { target: { value: '动画， 游戏,  音乐' } })
-    expect((input as HTMLInputElement).value).toBe('动画， 游戏,  音乐')
-
-    fireEvent.blur(input)
-    expect((input as HTMLInputElement).value).toBe('动画, 游戏, 音乐')
-    cleanup()
-  })
-})
-
 describe('note editor markdown paste', () => {
+  it('turns a directly pasted URL into a link bookmark', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit, LinkBookmark, MarkdownPaste],
+      content: '',
+    })
+    const event = pasteEvent('https://example.com/guide')
+
+    expect(handleMarkdownPaste(editor, event)).toBe(true)
+    expect(event.defaultPrevented).toBe(true)
+    expect(editor.getJSON().content?.[0]).toMatchObject({ type: 'linkBookmark', attrs: { href: 'https://example.com/guide', host: 'example.com', label: 'example.com' } })
+    editor.destroy()
+  })
+
+  it('leaves a URL to the native text paste path with Ctrl/Cmd + Shift + V', () => {
+    const editor = new Editor({ element: document.createElement('div'), extensions: [StarterKit, LinkBookmark, MarkdownPaste], content: '' })
+    const event = pasteEvent('https://example.com')
+
+    expect(handleMarkdownPaste(editor, event, true)).toBe(false)
+    expect(event.defaultPrevented).toBe(false)
+    editor.destroy()
+  })
+
+  it('inserts a visible link when no text is selected', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit.configure({ link: false }), Link],
+      content: '<p></p>',
+    })
+
+    expect(applyNoteLink(editor, 'https://example.com')).toBe(true)
+    expect(editor.getJSON().content?.[0]).toMatchObject({ content: [{ text: 'https://example.com', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }] }] })
+    editor.destroy()
+  })
+
+  it('normalizes repeated numbered-list markers in pasted text', () => {
+    expect(normalizeOrderedListMarkers('1. 第一项\n1. 第二项\n2. 第三项\n3. 第四项')).toBe('1. 第一项\n2. 第二项\n3. 第三项\n4. 第四项')
+  })
+
+  it('creates collapsible blocks whose open state is stored in note content', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit, Details.configure({ persist: true }), DetailsSummaryWithBreaks, DetailsContent],
+      content: '<p>可折叠的正文</p>',
+    })
+
+    expect(editor.commands.setDetails()).toBe(true)
+    expect(editor.getJSON().content?.[0]).toMatchObject({
+      type: 'details',
+      attrs: { open: false },
+      content: [{ type: 'detailsSummary' }, { type: 'detailsContent', content: [{ type: 'paragraph', content: [{ text: '可折叠的正文' }] }] }],
+    })
+
+    const toggle = editor.view.dom.querySelector('[data-type="details"] > button') as HTMLButtonElement
+    toggle.click()
+    expect(editor.getJSON().content?.[0]).toMatchObject({ attrs: { open: true } })
+
+    editor.commands.insertContent({ type: 'hardBreak' })
+    expect(editor.getJSON().content?.[0]?.content?.[0]).toMatchObject({ type: 'detailsSummary', content: [{ type: 'hardBreak' }] })
+    editor.destroy()
+  })
+
   it('inserts markdown as structured rich text', () => {
     const editor = new Editor({
       element: document.createElement('div'),
@@ -177,5 +214,17 @@ describe('note updates', () => {
     const result = applyNotePatch(note, { title: '新标题' }, '2026-02-01T00:00:00.000Z')
     expect(result).not.toBe(note)
     expect(result).toMatchObject({ title: '新标题', updatedAt: '2026-02-01T00:00:00.000Z' })
+  })
+})
+
+describe('single-note Markdown files', () => {
+  it('exports a title as a Markdown heading and a safe filename', () => {
+    expect(markdownExport('旅行 / 清单', '- 订机票')).toBe('# 旅行 / 清单\n\n- 订机票\n')
+    expect(markdownFileName('旅行 / 清单')).toBe('旅行 - 清单.md')
+  })
+
+  it('uses a leading level-one heading as the imported note title', () => {
+    expect(splitMarkdownNote('\uFEFF# 新笔记\n\n正文')).toEqual({ title: '新笔记', content: '正文' })
+    expect(splitMarkdownNote('没有标题')).toEqual({ title: null, content: '没有标题' })
   })
 })
