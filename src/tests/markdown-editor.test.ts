@@ -42,6 +42,17 @@ describe('note editor markdown paste', () => {
     editor.destroy()
   })
 
+  it('exports a link bookmark as a usable Markdown link', () => {
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit, LinkBookmark, Markdown],
+      content: { type: 'doc', content: [{ type: 'linkBookmark', attrs: { href: 'https://example.com/guide', host: 'example.com', label: '示例指南' } }] },
+    })
+
+    expect(editor.getMarkdown()).toBe('[示例指南](https://example.com/guide)')
+    editor.destroy()
+  })
+
   it('leaves a URL to the native text paste path with Ctrl/Cmd + Shift + V', () => {
     const editor = new Editor({ element: document.createElement('div'), extensions: [StarterKit, LinkBookmark, MarkdownPaste], content: '' })
     const event = pasteEvent('https://example.com')

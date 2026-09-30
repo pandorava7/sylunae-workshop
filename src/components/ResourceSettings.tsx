@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Download, ExternalLink, HardDrive, LoaderCircle, PackageOpen, Trash2, Upload } from 'lucide-react'
-import type { ResourceDownloadProgress, ResourceItem, ResourceSummary } from '../shared/types'
+import { CheckCircle2, Database, Download, ExternalLink, FolderOpen, HardDrive, LoaderCircle, Music2, PackageOpen, Trash2, Upload } from 'lucide-react'
+import type { ManagedResourceDirectory, ResourceDownloadProgress, ResourceItem, ResourceSummary } from '../shared/types'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
@@ -72,6 +72,16 @@ export function ResourceSettings() {
     } finally { setBusyId('') }
   }
 
+  const openDirectory = async (directory: ManagedResourceDirectory) => {
+    if (!window.sylunae) return
+    setError('')
+    try {
+      await window.sylunae.resources.openDirectory(directory)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '无法打开这个文件夹。')
+    }
+  }
+
   if (!desktop) return <section className="settings-pane resource-settings-empty"><PackageOpen /><h3>扩展资源仅在桌面端可用</h3><p>桌面端可以下载资源到本机并在离线时继续使用。</p></section>
 
   return <div className="resource-settings">
@@ -79,6 +89,16 @@ export function ResourceSettings() {
       <div className="resource-summary-heading"><div><span><PackageOpen /></span><div><h3>扩展资源</h3><p>统一管理按需下载和自行添加的本地内容。</p></div></div><Button variant="outline" className="button secondary" onClick={() => void importAudio()} disabled={Boolean(busyId)}><Upload />{busyId === 'import' ? '正在添加…' : '添加白噪音'}</Button></div>
       <div className="resource-summary-grid"><div><HardDrive /><span><strong>{formatBytes(summary?.installedBytes || 0)}</strong><small>本地占用</small></span></div><div><Download /><span><strong>{summary?.items.filter((item) => item.state === 'installed' || item.state === 'builtin').length || 0}</strong><small>可离线资源</small></span></div><div><PackageOpen /><span><strong>{summary?.items.length || 0}</strong><small>资源总数</small></span></div></div>
       {!summary?.remoteConfigured && <p className="resource-config-note">尚未配置公开资源地址。内置和用户添加的资源仍可正常使用；下载资源前请在 <code>.env.local</code> 中填写 <code>MAIN_VITE_RESOURCE_PUBLIC_BASE_URL</code>。</p>}
+    </section>
+
+    <section className="settings-pane resource-folders-pane">
+      <div className="resource-list-heading"><div><strong>本地文件夹</strong><small>在文件资源管理器中查看应用管理的本地内容</small></div></div>
+      <div className="resource-folder-list">
+        <div className="resource-folder-item"><span><Database /></span><div><strong>应用数据</strong><small>数据库、缓存与全部应用资源的根目录</small></div><Button variant="outline" size="sm" onClick={() => void openDirectory('app-data')}><FolderOpen />打开</Button></div>
+        <div className="resource-folder-item"><span><Music2 /></span><div><strong>音乐下载</strong><small>仅包含从链接下载到默认位置的音乐</small></div><Button variant="outline" size="sm" onClick={() => void openDirectory('music')}><FolderOpen />打开</Button></div>
+        <div className="resource-folder-item"><span><PackageOpen /></span><div><strong>扩展资源</strong><small>已下载或添加的白噪音等资源</small></div><Button variant="outline" size="sm" onClick={() => void openDirectory('resources')}><FolderOpen />打开</Button></div>
+      </div>
+      <p className="resource-folder-note">从电脑文件导入的音乐会保留在原位置，资料库只记录文件路径，不会复制到“音乐下载”文件夹。</p>
     </section>
 
     <section className="settings-pane resource-list-pane">

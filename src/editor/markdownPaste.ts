@@ -1,6 +1,6 @@
 import { Extension, type Editor } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
-import { bookmarkAttributes, isStandaloneHttpUrl } from './linkBookmark'
+import { bookmarkAttributes, enrichBookmark, isStandaloneHttpUrl } from './linkBookmark'
 
 export function looksLikeMarkdown(value: string) {
   const blockSyntax = /(^|\n)\s{0,3}(#{1,6}\s+|```|~~~|>\s+|[-*+]\s+|\d+[.)]\s+|- \[[ xX]\]\s+|(?:[-*_]\s*){3,}$)/m
@@ -72,7 +72,10 @@ export function handleMarkdownPaste(editor: Editor | null, event: ClipboardEvent
   const plainText = event.clipboardData?.getData('text/plain')?.trim()
   if (editor && plainText && isStandaloneHttpUrl(plainText)) {
     event.preventDefault()
-    return editor.chain().focus().insertContent({ type: 'linkBookmark', attrs: bookmarkAttributes(plainText) }).run()
+    const attrs = bookmarkAttributes(plainText)
+    const inserted = editor.chain().focus().insertContent({ type: 'linkBookmark', attrs }).run()
+    if (inserted) enrichBookmark(editor, attrs.bookmarkId, plainText)
+    return inserted
   }
 
   if (handleListContinuationPaste(editor, event)) return true

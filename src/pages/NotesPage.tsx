@@ -156,6 +156,9 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     titleTimer.current = setTimeout(commitTitle, 500)
   }
   const editor = useEditor({
+    // Creating the editor during render can leave a destroyed instance behind
+    // when React abandons or replays the initial render (for example on reload).
+    immediatelyRender: false,
     extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false, autolink: true }), NoteImage.configure({ allowBase64: true }), Placeholder.configure({ placeholder: '从这里开始书写…' }), TaskList, TaskItem.configure({ nested: true }), TableKit.configure({ table: { resizable: true } }), Details.configure({ persist: true, HTMLAttributes: { class: 'note-details' }, renderToggleButton: ({ element, isOpen, node }) => { const label = node.textContent || '折叠内容'; element.setAttribute('aria-label', isOpen ? `收起：${label}` : `展开：${label}`); element.setAttribute('title', isOpen ? '收起内容' : '展开内容') } }), NoteDetailsSummary, DetailsContent, LinkBookmark, Markdown, MarkdownPaste],
     content: note.content,
     editable: !inTrash,
@@ -193,7 +196,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
   })
 
   useEffect(() => {
-    if (!editor) return
+    if (!editor || editor.isDestroyed) return
     editor.setEditable(!inTrash)
     editor.commands.setContent(note.content, { emitUpdate: false })
   }, [note.id, inTrash])
@@ -207,7 +210,7 @@ function NoteEditor({ note, folders, inTrash, onSave, onTrash, onRestore, onDest
     if (pendingTitle.current !== null) saveRef.current({ title: pendingTitle.current })
   }, [])
 
-  if (!editor) return null
+  if (!editor || editor.isDestroyed) return null
   const setLink = (url: string) => applyNoteLink(editor, url)
   const addImage = (url: string) => editor.chain().focus().setImage({ src: url }).run()
   const addImageFile = async (file: File) => addImage(await readImageFile(file))

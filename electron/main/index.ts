@@ -12,7 +12,7 @@ import sharp from 'sharp'
 import { closeDatabase, loadSnapshot, replaceSnapshot, saveSnapshotPatch } from './database'
 import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
 import { downloadResource, getResourceAudioPath, importWhiteNoise, listResources, removeResource } from './resourceManager'
-import type { AppSnapshot, AppSnapshotPatch, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
+import type { AppSnapshot, AppSnapshotPatch, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, LinkPreview, ManagedResourceDirectory, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.flac', '.opus'])
 const AUDIO_MIME_TYPES: Record<string, string> = {
@@ -431,6 +431,19 @@ function getDefaultMusicDirectory(): string {
   return directory
 }
 
+function managedResourceDirectory(directory: ManagedResourceDirectory): string {
+  switch (directory) {
+    case 'app-data': return app.getPath('userData')
+    case 'music': return getDefaultMusicDirectory()
+    case 'resources': {
+      const resourceDirectory = join(app.getPath('userData'), 'resources')
+      mkdirSync(resourceDirectory, { recursive: true })
+      return resourceDirectory
+    }
+    default: throw new Error('不支持的本地文件夹')
+  }
+}
+
 function sanitizeFileName(value: string): string {
   const clean = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/g, '').trim()
   return (clean || '未命名音频').slice(0, 180)
@@ -489,6 +502,52 @@ async function findFavicon(rawUrl: string): Promise<string | null> {
       if (declared) return declared
     }
     return new URL('/favicon.ico', finalUrl).toString()
+  } catch { return null } finally { clearTimeout(timeout) }
+}
+
+function decodeHtml(value: string): string {
+  return value.replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/\s+/g, ' ').trim()
+}
+
+function htmlAttribute(tag: string, name: string): string | null {
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag)
+  return match ? decodeHtml(match[1] ?? match[2] ?? match[3] ?? '') : null
+}
+
+function metaContent(html: string, name: string): string | null {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    const key = htmlAttribute(tag, 'property') ?? htmlAttribute(tag, 'name')
+    if (key?.toLowerCase() === name.toLowerCase()) return htmlAttribute(tag, 'content')
+  }
+  return null
+}
+
+async function getLinkPreview(rawUrl: string): Promise<LinkPreview | null> {
+  if (typeof rawUrl !== 'string' || rawUrl.length > 4096) return null
+  let url: URL
+  try { url = new URL(rawUrl) } catch { return null }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || isPrivateHost(url.hostname)) return null
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 6000)
+  try {
+    let response: Response | null = null
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      if (!['http:', 'https:'].includes(url.protocol) || isPrivateHost(url.hostname)) return null
+      response = await fetch(url, { redirect: 'manual', signal: controller.signal, headers: { 'User-Agent': 'Sylunae-Workshop/0.1', Accept: 'text/html,application/xhtml+xml' } })
+      if (response.status < 300 || response.status >= 400) break
+      const location = response.headers.get('location')
+      if (!location || redirects === 3) return null
+      url = new URL(location, url)
+    }
+    if (!response || !response.ok || !(response.headers.get('content-type') || '').includes('text/html')) return null
+    const finalUrl = url
+    if (Number(response.headers.get('content-length') || 0) > 2 * 1024 * 1024) return null
+    const html = (await response.text()).slice(0, 512 * 1024)
+    const host = finalUrl.hostname.replace(/^www\./i, '')
+    const title = metaContent(html, 'og:title') || metaContent(html, 'twitter:title') || /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] || host
+    const description = metaContent(html, 'og:description') || metaContent(html, 'twitter:description') || metaContent(html, 'description') || ''
+    return { url: finalUrl.toString(), host, title: decodeHtml(title).slice(0, 300) || host, description: decodeHtml(description).slice(0, 500), iconUrl: faviconFromHtml(html, finalUrl) || new URL('/favicon.ico', finalUrl).toString() }
   } catch { return null } finally { clearTimeout(timeout) }
 }
 
@@ -829,10 +888,20 @@ function registerIpc(): void {
     }
     return `sylunae-media://audio/${Buffer.from(filePath).toString('base64url')}`
   })
+  ipcMain.handle('music:show-in-folder', (_event, filePath: string) => {
+    if (typeof filePath !== 'string' || !isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extname(filePath).toLowerCase())) {
+      throw new Error('音乐文件不可用或未加入资料库')
+    }
+    shell.showItemInFolder(resolve(filePath))
+  })
   ipcMain.handle('music:read-metadata', (_event, filePath: string) => readEditableMetadata(filePath))
   ipcMain.handle('music:update-metadata', (_event, update: MusicMetadataUpdate) => updateTrackMetadata(update))
 
   ipcMain.handle('resources:list', () => listResources())
+  ipcMain.handle('resources:open-directory', async (_event, directory: ManagedResourceDirectory) => {
+    const error = await shell.openPath(managedResourceDirectory(directory))
+    if (error) throw new Error(`无法打开文件夹：${error}`)
+  })
   ipcMain.handle('resources:download', (event, id: string) => downloadResource(id, (progress) => {
     if (!event.sender.isDestroyed()) event.sender.send('resources:download-progress', progress)
   }))
@@ -985,6 +1054,7 @@ function registerIpc(): void {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
   ipcMain.handle('system:find-favicon', (_event, url: string) => findFavicon(url))
+  ipcMain.handle('system:get-link-preview', (_event, url: string) => getLinkPreview(url))
   ipcMain.handle('system:pick-pomodoro-alarm', async () => {
     const result = await dialog.showOpenDialog({
       title: '选择番茄钟提示音',

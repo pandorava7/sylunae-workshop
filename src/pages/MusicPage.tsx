@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Album, ArrowRight, CloudRain, Disc3, FileMusic, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
+import { Album, ArrowRight, CloudRain, Disc3, FileMusic, FolderOpen, ListMusic, LocateFixed, Music2, Pause, PencilLine, Play, Plus, Repeat, Repeat1, Search, Shuffle, SkipBack, SkipForward, Trash2, Volume1, Volume2 } from 'lucide-react'
 import { useAppStore } from '../app/AppStore'
 import type { MusicAlbum, MusicMetadataUpdate, MusicTrack } from '../shared/types'
 import { formatDuration } from '../utils'
@@ -187,7 +187,7 @@ export function MusicPage({ view: controlledView, onViewChange, onNowPlayingChan
         <button className="track-play" disabled={track.missing} onClick={() => currentId === track.id ? togglePlay() : void playTrack(track)}>{currentId === track.id && playing ? <Pause size={15} /> : <span>{index + 1}</span>}</button>
         <div className="track-title"><div className="tiny-cover">{trackCover(track, albums, tracks) ? <img src={trackCover(track, albums, tracks)} alt="" /> : <Music2 size={15} />}</div><div><strong className="private-music-title">{track.title}</strong><span className={track.missing ? undefined : 'private-music-artist'}>{track.missing ? '文件已移动或删除' : track.artist}</span></div></div>
         {(() => { const album = track.albumId ? albums.find((item) => item.id === track.albumId) : undefined; return album ? <button type="button" className="track-album track-album-link private-music-album" onClick={() => setAlbumTarget(album)}>{track.album}</button> : <span className="track-album private-music-album">{track.album}</span> })()}<span>{formatDuration(track.duration)}</span>
-        <div className="track-actions">{track.missing && <button onClick={() => void relocate(track)} title="重新定位"><LocateFixed size={16} /></button>}<button disabled={track.missing} onClick={() => setEditTarget(track)} title="编辑元信息"><PencilLine size={16} /></button><button onClick={() => setRemoveTarget(track)} title="移除索引"><Trash2 size={16} /></button></div>
+        <div className="track-actions">{track.missing && <button onClick={() => void relocate(track)} title="重新定位"><LocateFixed size={16} /></button>}<button disabled={track.missing} onClick={() => void window.sylunae?.music.showInFolder(track.path)} title="在文件夹中显示"><FolderOpen size={16} /></button><button disabled={track.missing} onClick={() => setEditTarget(track)} title="编辑元信息"><PencilLine size={16} /></button><button onClick={() => setRemoveTarget(track)} title="移除索引"><Trash2 size={16} /></button></div>
       </div>)}</div> : filteredAlbums.length ? <div className="music-album-grid">{filteredAlbums.map((album) => {
         const albumTracks = tracks.filter((track) => track.albumId === album.id)
         const cover = albumCover(album, albumTracks)

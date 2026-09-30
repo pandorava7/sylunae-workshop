@@ -279,6 +279,7 @@ export interface MediaToolsProgress {
 export type ResourceKind = 'white-noise'
 export type ResourceOrigin = 'builtin' | 'official' | 'custom'
 export type ResourceInstallState = 'builtin' | 'available' | 'downloading' | 'installed' | 'error'
+export type ManagedResourceDirectory = 'app-data' | 'music' | 'resources'
 
 export interface ResourceAttribution {
   creator: string
@@ -567,11 +568,13 @@ export interface SylunaeAPI {
     relocate: (trackId: string) => Promise<MusicTrack | null>
     checkPaths: (paths: string[]) => Promise<Record<string, boolean>>
     getAudioUrl: (path: string) => Promise<string>
+    showInFolder: (path: string) => Promise<void>
     readMetadata: (path: string) => Promise<MusicEditableMetadata>
     updateMetadata: (update: MusicMetadataUpdate) => Promise<MusicTrack>
   }
   resources: {
     list: () => Promise<ResourceSummary>
+    openDirectory: (directory: ManagedResourceDirectory) => Promise<void>
     download: (id: string) => Promise<ResourceItem>
     remove: (id: string) => Promise<void>
     importWhiteNoise: () => Promise<ResourceItem | null>
@@ -599,8 +602,17 @@ export interface SylunaeAPI {
     getTheme: () => Promise<'light' | 'dark'>
     openExternal: (url: string) => Promise<void>
     findFavicon: (url: string) => Promise<string | null>
+    getLinkPreview: (url: string) => Promise<LinkPreview | null>
     notifyPomodoroComplete: (focusCompleted: boolean) => Promise<void>
     pickPomodoroAlarm: () => Promise<string | null>
     getPomodoroAlarmUrl: (path: string) => Promise<string | null>
   }
+}
+
+export interface LinkPreview {
+  url: string
+  host: string
+  title: string
+  description: string
+  iconUrl: string | null
 }
