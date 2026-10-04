@@ -3,6 +3,12 @@ import type { AppSnapshot, AppSnapshotPatch, ImageScanProgress, MediaToolsProgre
 
 const api: SylunaeAPI = {
   platform: 'electron',
+  imageProcessing: {
+    getDirectory: () => ipcRenderer.invoke('image-processing:get-directory'),
+    pickDirectory: () => ipcRenderer.invoke('image-processing:pick-directory'),
+    openDirectory: () => ipcRenderer.invoke('image-processing:open-directory'),
+    save: (name, bytes) => ipcRenderer.invoke('image-processing:save', name, bytes),
+  },
   storage: {
     load: () => ipcRenderer.invoke('storage:load'),
     save: (patch: AppSnapshotPatch) => ipcRenderer.invoke('storage:save', patch),
@@ -72,6 +78,7 @@ const api: SylunaeAPI = {
     findFavicon: (url) => ipcRenderer.invoke('system:find-favicon', url),
     getLinkPreview: (url) => ipcRenderer.invoke('system:get-link-preview', url),
     notifyPomodoroComplete: (focusCompleted) => ipcRenderer.invoke('system:notify-pomodoro-complete', focusCompleted),
+    notifyBirthday: (body) => ipcRenderer.invoke('system:notify-birthday', body),
     pickPomodoroAlarm: () => ipcRenderer.invoke('system:pick-pomodoro-alarm'),
     getPomodoroAlarmUrl: (path) => ipcRenderer.invoke('system:get-pomodoro-alarm-url', path),
   },

@@ -6,6 +6,7 @@ import { createDefaultSnapshot } from '../../src/shared/defaults'
 import type { AppSnapshot } from '../../src/shared/types'
 import { normalizeThemePalettes } from '../../src/shared/theme'
 import { normalizeImageLibrary } from '../../src/images/library'
+import { normalizeBirthdays } from '../../src/birthdays/reminders'
 import { normalizeCountdowns } from '../../src/countdowns/normalize'
 import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot } from '../../src/data/snapshotSections'
 import type { AppSnapshotPatch } from '../../src/shared/types'
@@ -91,6 +92,7 @@ function normalizeSnapshot(parsed: Partial<AppSnapshot>): AppSnapshot {
     countdowns: normalizeCountdowns(parsed.countdowns ?? [], imageLibrary.assets),
     clipboardSnippets: parsed.clipboardSnippets ?? [],
     launcherLinks: parsed.launcherLinks ?? [],
+    birthdays: normalizeBirthdays(parsed.birthdays),
     imageLibrary,
   }
 }

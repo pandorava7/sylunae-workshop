@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { Clock3 } from 'lucide-react'
+import { BirthdayNotifications } from './components/BirthdayNotifications'
 import { Sidebar } from './components/Sidebar'
 import { FunFeaturesDialog } from './components/FunFeaturesDialog'
 import { DeskCompanion } from './components/DeskCompanion'
@@ -189,7 +190,7 @@ export default function App() {
   const pomodoroProgress = Math.min(100, Math.max(0, ((pomodoroTotal - snapshot.pomodoro.secondsRemaining) / pomodoroTotal) * 100))
   const pomodoroTime = `${String(Math.floor(snapshot.pomodoro.secondsRemaining / 60)).padStart(2, '0')}:${String(snapshot.pomodoro.secondsRemaining % 60).padStart(2, '0')}`
 
-  return <TooltipProvider><div className="app-shell" style={{ '--sidebar-width': `${renderedSidebarWidth}px` } as CSSProperties}>
+  return <BirthdayNotifications><TooltipProvider><div className="app-shell" style={{ '--sidebar-width': `${renderedSidebarWidth}px` } as CSSProperties}>
     <Sidebar active={activeTool} taskView={taskView} collectionView={collectionView} musicSection={musicSection} musicView={musicView} collapsed={snapshot.settings.sidebarCollapsed} width={renderedSidebarWidth} mobileOpen={mobileOpen} settingsOpen={settingsOpen} funFeaturesOpen={funFeaturesOpen} nowPlaying={nowPlaying} nowPlayingAmbient={nowPlayingAmbient} onSelect={selectTool} onSelectTaskView={selectTaskView} onSelectCollectionView={selectCollectionView} onSelectMusicSection={selectMusicSection} onSelectMusicView={selectMusicView} onOpenSettings={openSettings} onOpenFunFeatures={openFunFeatures} onResize={resizeSidebar} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
     {window.sylunae && <div className={`app-titlebar ${pageScrolled ? 'scrolled' : ''} ${snapshot.pomodoro.running ? 'pomodoro-running' : ''}`}>
       <div className="app-titlebar-drag" />
@@ -217,5 +218,5 @@ export default function App() {
     <Suspense fallback={null}>{settingsMounted && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />}</Suspense>
     <DeskCompanion settings={snapshot.settings.deskCompanion} />
     <FunFeaturesDialog open={funFeaturesOpen} onOpenChange={setFunFeaturesOpen} />
-  </div></TooltipProvider>
+  </div></TooltipProvider></BirthdayNotifications>
 }

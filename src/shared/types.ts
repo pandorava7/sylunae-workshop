@@ -502,6 +502,29 @@ export interface LauncherLink {
   updatedAt: string
 }
 
+export interface BirthdayPerson {
+  id: string
+  name: string
+  date: string
+  enabled: boolean
+}
+
+export interface BirthdaySettings {
+  enabled: boolean
+  daysBefore: number
+  time: string
+  repeatCount: number
+  intervalHours: number
+  external: boolean
+  toast: boolean
+}
+
+export interface BirthdayState {
+  people: BirthdayPerson[]
+  settings: BirthdaySettings
+  deliveries: Record<string, { occurrence: string; count: number; lastSentAt: string }>
+}
+
 export interface AppSnapshot {
   version: 1
   settings: AppSettings
@@ -519,6 +542,7 @@ export interface AppSnapshot {
   countdowns: CountdownEvent[]
   clipboardSnippets: ClipboardSnippet[]
   launcherLinks: LauncherLink[]
+  birthdays: BirthdayState
 }
 
 /** Top-level persistence unit. Updates must contain only the domains that changed. */
@@ -551,6 +575,12 @@ export interface PartialBackupEnvelope {
 
 export interface SylunaeAPI {
   platform: 'electron'
+  imageProcessing: {
+    getDirectory: () => Promise<string>
+    pickDirectory: () => Promise<string | null>
+    openDirectory: () => Promise<void>
+    save: (name: string, bytes: ArrayBuffer) => Promise<string>
+  }
   storage: {
     load: () => Promise<AppSnapshot>
     save: (patch: AppSnapshotPatch) => Promise<void>
@@ -604,6 +634,7 @@ export interface SylunaeAPI {
     findFavicon: (url: string) => Promise<string | null>
     getLinkPreview: (url: string) => Promise<LinkPreview | null>
     notifyPomodoroComplete: (focusCompleted: boolean) => Promise<void>
+    notifyBirthday: (body: string) => Promise<boolean>
     pickPomodoroAlarm: () => Promise<string | null>
     getPomodoroAlarmUrl: (path: string) => Promise<string | null>
   }

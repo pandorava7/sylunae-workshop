@@ -17,6 +17,7 @@ export const snapshotSectionKeys = [
   'countdowns',
   'clipboardSnippets',
   'launcherLinks',
+  'birthdays',
 ] as const satisfies readonly (keyof AppSnapshot)[]
 
 export type SnapshotSectionKey = typeof snapshotSectionKeys[number]

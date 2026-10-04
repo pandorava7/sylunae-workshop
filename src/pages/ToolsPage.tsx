@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Cake,
   Check,
   Archive,
   ArchiveRestore,
@@ -8,7 +9,6 @@ import {
   ExternalLink,
   FileImage,
   AudioLines,
-  ImageDown,
   Link2,
   Pencil,
   Plus,
@@ -40,11 +40,14 @@ import {
 import { Textarea } from "../components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { usePersistentState } from "../lib/usePersistentState";
+import { BirthdayTool } from '../components/BirthdayTool';
 import { AudioEditor } from "../components/AudioEditor";
+import { ImageProcessor } from "../components/ImageProcessor";
 
-type ToolView = "home" | "clipboard" | "launcher" | "image" | "audio";
+type ToolView = "home" | "clipboard" | "launcher" | "image" | "audio" | "birthdays";
 
 const toolCards = [
+  { id: "birthdays" as const, title: "生日通知", description: "记住重要的日子，提前送来生日提醒与祝福。", icon: Cake, accent: "rose" },
   {
     id: "clipboard" as const,
     title: "剪贴板",
@@ -61,8 +64,8 @@ const toolCards = [
   },
   {
     id: "image" as const,
-    title: "图片转换 / 压缩",
-    description: "在本地转换 JPG、PNG、WebP，并自由控制图片质量。",
+    title: "图片处理",
+    description: "裁剪、旋转图片，批量转换格式与压缩。",
     icon: FileImage,
     accent: "green",
   },
@@ -129,8 +132,9 @@ export function ToolsPage({
       )}
       {view === "clipboard" && <ClipboardTool />}
       {view === "launcher" && <LauncherTool />}
-      {view === "image" && <ImageTool />}
+      {view === "image" && <ImageProcessor />}
       {view === "audio" && <AudioEditor />}
+      {view === "birthdays" && <BirthdayTool />}
     </section>
   );
 }
@@ -823,114 +827,6 @@ function LinkDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ImageTool() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [format, setFormat] = useState("image/webp");
-  const [quality, setQuality] = useState(82);
-  const [busy, setBusy] = useState(false);
-  const convert = async () => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      const bitmap = await createImageBitmap(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, format, quality / 100),
-      );
-      if (!blob) return;
-      const extension = format.split("/")[1].replace("jpeg", "jpg");
-      const anchor = document.createElement("a");
-      anchor.href = URL.createObjectURL(blob);
-      anchor.download = `${file.name.replace(/\.[^.]+$/, "")}.${extension}`;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="tool-workspace">
-      <div className="panel-heading">
-        <div>
-          <h2>图片转换 / 压缩</h2>
-          <p>处理在浏览器本地完成，图片不会上传</p>
-        </div>
-      </div>
-      <div className="image-tool-card">
-        <button
-          className={`image-dropzone ${file ? "has-file" : ""}`}
-          onClick={() => inputRef.current?.click()}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            hidden
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {file ? (
-            <>
-              <ImageDown size={34} />
-              <strong className="user-content">{file.name}</strong>
-              <span>
-                {(file.size / 1024 / 1024).toFixed(2)} MB · 点击更换图片
-              </span>
-            </>
-          ) : (
-            <>
-              <FileImage size={38} />
-              <strong>选择一张图片</strong>
-              <span>支持 PNG、JPG 与 WebP，单次处理一张</span>
-            </>
-          )}
-        </button>
-        <div className="image-options">
-          <label>
-            输出格式
-            <Select value={format} onValueChange={setFormat}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="image/webp">WebP</SelectItem>
-                <SelectItem value="image/jpeg">JPG</SelectItem>
-                <SelectItem value="image/png">PNG</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <label>
-            图片质量 <output>{quality}%</output>
-            <input
-              type="range"
-              min="20"
-              max="100"
-              value={quality}
-              onChange={(e) => setQuality(Number(e.target.value))}
-              disabled={format === "image/png"}
-            />
-          </label>
-          <Button
-            className="button primary"
-            disabled={!file || busy}
-            onClick={() => void convert()}
-          >
-            <ImageDown size={17} />
-            {busy ? "正在处理…" : "转换并下载"}
-          </Button>
-        </div>
-      </div>
-      <div className="privacy-note">
-        <Check size={16} />
-        整个过程只使用设备本地计算，不会传输或保存原图。
-      </div>
-    </div>
   );
 }
 

@@ -11,6 +11,7 @@ import { create as createYoutubeDl } from 'youtube-dl-exec'
 import sharp from 'sharp'
 import { closeDatabase, loadSnapshot, replaceSnapshot, saveSnapshotPatch } from './database'
 import { getMediaToolPaths, getMediaToolsStatus, installMediaTools } from './mediaTools'
+import { registerImageProcessing } from './imageProcessing'
 import { downloadResource, getResourceAudioPath, importWhiteNoise, listResources, removeResource } from './resourceManager'
 import type { AppSnapshot, AppSnapshotPatch, ImageAspectType, ImageAsset, ImageLibraryRoot, ImageLibraryState, ImageScanProgress, LinkPreview, ManagedResourceDirectory, MusicEditableMetadata, MusicImportProgress, MusicImportStage, MusicMetadataUpdate, MusicRemoteImport, MusicTrack } from '../../src/shared/types'
 
@@ -825,6 +826,7 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
+  registerImageProcessing()
   ipcMain.handle('storage:load', () => loadSnapshot())
   ipcMain.handle('storage:save', (_event, patch: AppSnapshotPatch) => saveSnapshotPatch(patch))
   ipcMain.handle('storage:replace', (_event, snapshot: AppSnapshot) => replaceSnapshot(snapshot))
@@ -1071,6 +1073,14 @@ function registerIpc(): void {
     if (!isIndexedPath(filePath) || !existsSync(filePath) || !AUDIO_EXTENSIONS.has(extension)) return null
     return `sylunae-media://audio/${Buffer.from(filePath).toString('base64url')}`
   })
+  ipcMain.handle('system:notify-birthday', (_event, body: unknown) => {
+    if (typeof body !== 'string' || body.length > 1000 || !Notification.isSupported()) return false
+    const notification = new Notification({ title: '丝月工坊 · 生日提醒', body, silent: true })
+    notification.on('click', () => { const owner = BrowserWindow.fromWebContents(_event.sender); owner?.show(); owner?.focus() })
+    notification.on('failed', (_event, error) => console.warn('生日通知发送失败', error))
+    notification.show()
+    return true
+  })
   ipcMain.handle('system:notify-pomodoro-complete', (_event, focusCompleted: boolean) => {
     if (!Notification.isSupported()) return
     new Notification({
@@ -1082,6 +1092,7 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('studio.sylunae.workshop')
   const rendererOrigin = process.env.ELECTRON_RENDERER_URL ? new URL(process.env.ELECTRON_RENDERER_URL).origin : 'null'
   protocol.handle('sylunae-media', async (request) => {
     const requestOrigin = request.headers.get('Origin')

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { AppSettings, AppSnapshot, BackupEnvelope, PartialBackupEnvelope, PartialBackupSection } from '../shared/types'
 import { normalizeThemePalettes } from '../shared/theme'
 import { normalizeImageLibrary } from '../images/library'
+import { normalizeBirthdays, validBirthdayDate } from '../birthdays/reminders'
 import { normalizeCountdowns } from '../countdowns/normalize'
 
 const timestamp = z.string().min(1)
@@ -61,6 +62,11 @@ const countdownSchema = z.object({
 }).transform((event) => ({ ...event, repeat: event.repeat ?? (event.yearly ? 'yearly' as const : 'none' as const) }))
 const clipboardSchema = z.object({ id: z.string(), title: z.string(), content: z.string(), category: z.string(), copyCount: z.number().int().nonnegative().optional().default(0), createdAt: timestamp, updatedAt: timestamp })
 const launcherSchema = z.object({ id: z.string(), title: z.string(), url: z.string(), description: z.string(), faviconUrl: z.string().optional(), archived: z.boolean().optional().default(false), createdAt: timestamp, updatedAt: timestamp })
+const birthdaySchema = z.object({
+  people: z.array(z.object({ id: z.string().min(1), name: z.string().min(1), date: z.string().refine(validBirthdayDate), enabled: z.boolean() })),
+  settings: z.object({ enabled: z.boolean(), daysBefore: z.number().int().min(0).max(365), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), repeatCount: z.number().int().min(1).max(20), intervalHours: z.number().int().min(1).max(8760), external: z.boolean(), toast: z.boolean() }),
+  deliveries: z.record(z.string(), z.object({ occurrence: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), count: z.number().int().nonnegative(), lastSentAt: z.string().refine((value) => Number.isFinite(Date.parse(value))) })),
+}).optional().default(normalizeBirthdays())
 const imageRootSchema = z.object({ id: z.string(), path: z.string(), name: z.string(), recursive: z.boolean(), identity: z.string(), missing: z.boolean(), createdAt: timestamp, updatedAt: timestamp, lastScannedAt: timestamp.nullable(), collectionId: z.string().nullable().optional() })
 const imageCollectionSchema = z.object({ id: z.string(), name: z.string(), createdAt: timestamp, updatedAt: timestamp })
 const imageAssetSchema = z.object({ id: z.string(), rootId: z.string().nullable().optional(), collectionIds: z.array(z.string()).optional(), path: z.string(), relativePath: z.string(), name: z.string(), extension: z.string(), size: z.number().nonnegative(), mtimeMs: z.number().nonnegative(), width: z.number().nonnegative(), height: z.number().nonnegative(), aspectType: z.enum(['landscape', 'portrait', 'square']), identity: z.string(), hash: z.string(), missing: z.boolean(), metadata: z.record(z.string(), z.unknown()).optional().default({}), createdAt: timestamp, updatedAt: timestamp })
@@ -85,6 +91,7 @@ const envelopeSchema = z.object({
     countdowns: z.array(countdownSchema).optional().default([]),
     clipboardSnippets: z.array(clipboardSchema).optional().default([]),
     launcherLinks: z.array(launcherSchema).optional().default([]),
+    birthdays: birthdaySchema,
     imageLibrary: z.object({ roots: z.array(imageRootSchema), collections: z.array(imageCollectionSchema).optional().default([]), assets: z.array(imageAssetSchema) }).optional().default({ roots: [], collections: [], assets: [] }),
   }),
 })
@@ -97,7 +104,7 @@ const partialPayloadSchemas: Record<PartialBackupSection, z.ZodType> = {
   notes: z.object({ folders: z.array(folderSchema), notes: z.array(noteSchema) }),
   music: z.object({ tracks: z.array(trackSchema), albums: z.array(albumSchema) }),
   collection: z.object({ bangumi: z.object({ username: z.string(), items: z.array(bangumiItemSchema), syncedAt: timestamp }).nullable(), bangumiUsername: z.string() }),
-  tools: z.object({ clipboardSnippets: z.array(clipboardSchema), launcherLinks: z.array(launcherSchema), imageLibrary: imageLibrarySchema }),
+  tools: z.object({ birthdays: birthdaySchema, clipboardSnippets: z.array(clipboardSchema), launcherLinks: z.array(launcherSchema), imageLibrary: imageLibrarySchema }),
   settings: settingsSchema,
 }
 
@@ -111,7 +118,7 @@ export const partialBackupSectionMeta: Array<{ id: PartialBackupSection; label: 
   { id: 'notes', label: '笔记本', description: '笔记与文件夹' },
   { id: 'music', label: '音乐库', description: '音乐和专辑索引，不含原始文件' },
   { id: 'collection', label: '收藏馆', description: 'Bangumi 收藏缓存与用户名' },
-  { id: 'tools', label: '工具箱', description: '剪贴板、链接启动器与图片索引' },
+  { id: 'tools', label: '工具箱', description: '剪贴板、链接启动器、生日通知与图片索引' },
   { id: 'settings', label: '设置', description: '主题、界面偏好和关联服务' },
 ]
 
@@ -122,7 +129,7 @@ export function createPartialBackup(snapshot: AppSnapshot, section: PartialBacku
     notes: (({ folders, notes }) => ({ folders, notes }))(snapshot),
     music: (({ tracks, albums }) => ({ tracks, albums }))(snapshot),
     collection: { bangumi: snapshot.bangumi, bangumiUsername: snapshot.settings.bangumiUsername },
-    tools: (({ clipboardSnippets, launcherLinks, imageLibrary }) => ({ clipboardSnippets, launcherLinks, imageLibrary }))(snapshot),
+    tools: (({ clipboardSnippets, launcherLinks, imageLibrary, birthdays }) => ({ clipboardSnippets, launcherLinks, imageLibrary, birthdays }))(snapshot),
     settings: snapshot.settings,
   }
   return { format: 'siyue-workshop-partial-backup', version: 1, section, exportedAt: new Date().toISOString(), payload: payload[section] }
@@ -150,7 +157,7 @@ export function applyPartialBackup(current: AppSnapshot, backup: PartialBackupEn
       const payload = backup.payload as { bangumi: AppSnapshot['bangumi']; bangumiUsername: string }
       return { ...current, bangumi: payload.bangumi, settings: { ...current.settings, bangumiUsername: payload.bangumiUsername, updatedAt } }
     }
-    case 'tools': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'clipboardSnippets' | 'launcherLinks' | 'imageLibrary'>) }
+    case 'tools': return { ...current, ...(backup.payload as Pick<AppSnapshot, 'clipboardSnippets' | 'launcherLinks' | 'imageLibrary' | 'birthdays'>) }
     case 'settings': return { ...current, settings: { ...(backup.payload as AppSettings), updatedAt } }
   }
 }

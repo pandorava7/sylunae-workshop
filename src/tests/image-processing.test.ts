@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest'
+import { centeredCrop, outputDimensions, outputName } from '../lib/imageProcessing'
+
+describe('image processing geometry', () => {
+  it('fits portrait and landscape presets inside the original image', () => {
+    for (const [width, height] of [[1200, 800], [800, 1200]]) {
+      for (const ratio of [1, 4 / 3, 3 / 4, 16 / 9, 9 / 16]) {
+        const rect = centeredCrop(width, height, ratio)
+        expect(rect.width / rect.height).toBeCloseTo(ratio)
+        expect(rect.x).toBeGreaterThanOrEqual(0)
+        expect(rect.y).toBeGreaterThanOrEqual(0)
+        expect(rect.x + rect.width).toBeLessThanOrEqual(width)
+        expect(rect.y + rect.height).toBeLessThanOrEqual(height)
+      }
+    }
+  })
+  it('rotates the cropped area without clipping or changing the source dimensions', () => {
+    const crop = { x: 100, y: 50, width: 600, height: 300 }
+    expect(outputDimensions(1200, 800, { crop, rotation: 90 })).toEqual({ width: 300, height: 600 })
+    expect(outputDimensions(1200, 800, { crop, rotation: 270 })).toEqual({ width: 300, height: 600 })
+    expect(outputDimensions(1200, 800, { crop, rotation: 180 })).toEqual({ width: 600, height: 300 })
+    expect(outputDimensions(1200, 800, { crop: null, rotation: 0 })).toEqual({ width: 1200, height: 800 })
+  })
+  it('uses a distinct output name and preserves names containing dots', () => {
+    expect(outputName('旅行.原图.png', 'image/jpeg')).toBe('旅行.原图-处理.jpg')
+    expect(outputName('photo', 'image/webp')).toBe('photo-处理.webp')
+  })
+})

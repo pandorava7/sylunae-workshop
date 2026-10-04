@@ -1,4 +1,5 @@
 import type { AppSnapshot } from './types'
+import { normalizeBirthdays } from '../birthdays/reminders'
 import { normalizeThemePalettes } from './theme'
 import { DESK_COMPANION_PRESETS, createDeskCompanionPreset } from './deskCompanionPresets'
 
@@ -63,5 +64,6 @@ export function createDefaultSnapshot(): AppSnapshot {
     countdowns: [],
     clipboardSnippets: [],
     launcherLinks: [],
+    birthdays: normalizeBirthdays(),
   }
 }

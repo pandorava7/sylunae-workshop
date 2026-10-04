@@ -5,6 +5,7 @@ import { migrateDefaultThemePalettes } from '../shared/theme'
 import { reconcileMusicLibrary } from '../music/albums'
 import { normalizeImageLibrary } from '../images/library'
 import { normalizeGoal } from '../goals/tracking'
+import { normalizeBirthdays } from '../birthdays/reminders'
 import { normalizeCountdowns } from '../countdowns/normalize'
 import { joinSnapshotSections, snapshotPatchEntries, splitSnapshot, type SnapshotSectionKey } from './snapshotSections'
 
@@ -129,6 +130,7 @@ function normalize(snapshot: Partial<AppSnapshot> | undefined): AppSnapshot {
     countdowns: normalizeCountdowns(snapshot.countdowns ?? [], imageLibrary.assets),
     clipboardSnippets: (snapshot.clipboardSnippets ?? []).map((snippet) => ({ ...snippet, copyCount: snippet.copyCount ?? 0 })),
       launcherLinks: snapshot.launcherLinks ?? [],
+    birthdays: normalizeBirthdays(snapshot.birthdays),
       imageLibrary,
       bangumi: null,
   }
